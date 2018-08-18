@@ -15,7 +15,10 @@
  */
 package ooo.zuo.cachedemo.cache;
 
+import android.app.Application;
 import android.content.Context;
+import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteOpenHelper;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
@@ -92,22 +95,22 @@ public class ACache {
 
     public static ACache get(Context ctx, String cacheName) {
         File f = new File(mCachePath, cacheName);
-        return get(f, MAX_SIZE, MAX_COUNT);
+        return get(ctx,f, MAX_SIZE, MAX_COUNT);
     }
 
-    public static ACache get(File cacheDir) {
-        return get(cacheDir, MAX_SIZE, MAX_COUNT);
+    public static ACache get(Context context,File cacheDir) {
+        return get(context,cacheDir, MAX_SIZE, MAX_COUNT);
     }
 
     public static ACache get(Context ctx, long max_zise, int max_count) {
         File f = new File(mCachePath, "cache");
-        return get(f, max_zise, max_count);
+        return get(ctx,f, max_zise, max_count);
     }
 
-    public static ACache get(File cacheDir, long max_zise, int max_count) {
+    public static ACache get(Context context, File cacheDir, long max_zise, int max_count) {
         ACache manager = mInstanceMap.get(cacheDir.getAbsoluteFile() + myPid());
         if (manager == null) {
-            manager = new ACache(cacheDir, max_zise, max_count);
+            manager = new ACache(context,cacheDir, max_zise, max_count);
             mInstanceMap.put(cacheDir.getAbsolutePath() + myPid(), manager);
         }
         return manager;
@@ -117,11 +120,11 @@ public class ACache {
         return "_" + android.os.Process.myPid();
     }
 
-    private ACache(File cacheDir, long max_size, int max_count) {
+    private ACache(Context context,File cacheDir, long max_size, int max_count) {
         if (!cacheDir.exists() && !cacheDir.mkdirs()) {
             throw new RuntimeException("can't make dirs in " + cacheDir.getAbsolutePath());
         }
-        mCache = new ACacheManager(cacheDir, max_size, max_count);
+        mCache = new ACacheManager(context,cacheDir, max_size, max_count);
     }
 
     /**
@@ -666,14 +669,23 @@ public class ACache {
         private final int countLimit;
         private final Map<File, Long> lastUsageDates = Collections.synchronizedMap(new HashMap<File, Long>());
         protected File cacheDir;
+        private Context context;
 
-        private ACacheManager(File cacheDir, long sizeLimit, int countLimit) {
+        private ACacheManager(Context context,File cacheDir, long sizeLimit, int countLimit) {
+            this.context = context.getApplicationContext();
             this.cacheDir = cacheDir;
             this.sizeLimit = sizeLimit;
             this.countLimit = countLimit;
             cacheSize = new AtomicLong();
             cacheCount = new AtomicInteger();
             calculateCacheSizeAndCacheCount();
+        }
+
+        private void createDatabase(){
+
+            CacheDatabaseHelper databaseHelper = new CacheDatabaseHelper(context);
+
+
         }
 
         /**
@@ -952,6 +964,45 @@ public class ACache {
             BitmapDrawable bd = new BitmapDrawable(bm);
             bd.setTargetDensity(bm.getDensity());
             return new BitmapDrawable(bm);
+        }
+    }
+
+    /**
+     * 缓存数据库
+     */
+    class CacheDatabaseHelper extends SQLiteOpenHelper{
+        private static final int VERSION = 1;
+        private static final String DATABASE_NAME = ".cache_database";
+
+
+        public CacheDatabaseHelper(Context context) {
+            super(context, "DATABASE_NAME", null, VERSION);
+        }
+
+        @Override
+        public void onCreate(SQLiteDatabase db) {
+            String sql = "create table cache( " +
+                    "name text," +
+                    "size long," +
+                    "createTime long," +
+                    "expireTime long," +
+                    "lastVisitTime long," +
+                    "primary key(\"name\")" +
+                    " )";
+            db.beginTransaction();
+            try {
+                db.execSQL(sql);
+                db.setTransactionSuccessful();
+            }catch (Exception e){
+                e.printStackTrace();
+            }finally {
+                db.endTransaction();
+            }
+        }
+
+        @Override
+        public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
+
         }
     }
 
