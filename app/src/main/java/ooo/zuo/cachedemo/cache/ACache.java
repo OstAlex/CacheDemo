@@ -16,7 +16,9 @@
 package ooo.zuo.cachedemo.cache;
 
 import android.app.Application;
+import android.content.ContentValues;
 import android.content.Context;
+import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.graphics.Bitmap;
@@ -25,6 +27,9 @@ import android.graphics.Canvas;
 import android.graphics.PixelFormat;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
+import android.support.annotation.Nullable;
+import android.text.TextUtils;
+import android.util.Log;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -46,8 +51,10 @@ import java.io.ObjectOutputStream;
 import java.io.OutputStream;
 import java.io.RandomAccessFile;
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
@@ -58,6 +65,9 @@ import java.util.concurrent.atomic.AtomicLong;
  * @author Michael Yang（www.yangfuhai.com） update at 2013.08.07
  */
 public class ACache {
+    private static final String TAG = "ACache";
+
+
     public static final int TIME_HOUR = 60 * 60;
     public static final int TIME_DAY = TIME_HOUR * 24;
     private static int MAX_SIZE = 1000 * 1000 * 50; // 50 mb
@@ -75,6 +85,7 @@ public class ACache {
     public static void init(String cachePath, String cacheName) {
         mCachePath = cachePath;
         mCacheName = cacheName;
+        Log.d(TAG, "init: path:"+mCachePath+" name:"+mCacheName);
     }
 
     /**
@@ -87,6 +98,7 @@ public class ACache {
         mCachePath = cachePath;
         mCacheName = cacheName;
         MAX_SIZE = maxSize;
+        Log.d(TAG, "init: path:"+mCachePath+" name:"+mCacheName);
     }
 
     public static ACache get(Context ctx) {
@@ -679,11 +691,32 @@ public class ACache {
             cacheSize = new AtomicLong();
             cacheCount = new AtomicInteger();
             calculateCacheSizeAndCacheCount();
+            createDatabase();
         }
 
         private void createDatabase(){
+            CacheDatabaseHelper helper = new CacheDatabaseHelper(context);
+            SQLiteDatabase database = helper.getWritableDatabase();
+            String path = database.getPath();
+            Log.d(TAG, "createDatabase: "+path);
+            helper.insert(new CacheModel("123"));
+            helper.insert(new CacheModel("456"));
+            helper.insert(new CacheModel("789"));
+            helper.insert(new CacheModel("001"));
 
-            CacheDatabaseHelper databaseHelper = new CacheDatabaseHelper(context);
+            CacheModel cache = new CacheModel("123");
+            cache.size = 1L;
+            helper.update(cache);
+            cache.lastVisitTime = System.currentTimeMillis();
+            helper.insertOrUpdate(cache);
+
+            CacheModel model = helper.query("123");
+            Log.d(TAG, "createDatabase: "+model);
+            List<CacheModel> cacheModels = helper.queryAll();
+            Log.d(TAG, "createDatabase: _________________________");
+            for (CacheModel cacheModel : cacheModels) {
+                Log.d(TAG, "createDatabase: "+cacheModel);
+            }
 
 
         }
@@ -972,16 +1005,17 @@ public class ACache {
      */
     class CacheDatabaseHelper extends SQLiteOpenHelper{
         private static final int VERSION = 1;
-        private static final String DATABASE_NAME = ".cache_database";
+        private static final String DatabaseName = ".cache_database.db";
+        private static final String TABLE_NAME = "cache";
 
 
         public CacheDatabaseHelper(Context context) {
-            super(context, "DATABASE_NAME", null, VERSION);
+            super(context, mCachePath+File.separator+mCacheName+File.separator+DatabaseName, null, VERSION);
         }
 
         @Override
         public void onCreate(SQLiteDatabase db) {
-            String sql = "create table cache( " +
+            String sql = "create table "+TABLE_NAME+" ( " +
                     "name text," +
                     "size long," +
                     "createTime long," +
@@ -1000,9 +1034,167 @@ public class ACache {
             }
         }
 
+        public boolean insertOrUpdate(CacheModel cache){
+            if (cache==null|| TextUtils.isEmpty(cache.name)){
+                return false;
+            }
+            SQLiteDatabase db = getWritableDatabase();
+
+            Cursor cursor = db.query(TABLE_NAME, new String[]{"name"}, "name = ?", new String[]{cache.name}, null, null, null);
+            if (cursor==null){
+                return insert(cache);
+            }else {
+                int count = cursor.getCount();
+                cursor.close();
+                if (count >0) {
+                    return update(cache);
+                }else {
+                    return insert(cache);
+                }
+            }
+        }
+
+        public List<CacheModel> queryAll(){
+            List<CacheModel> caches = new ArrayList<>();
+            SQLiteDatabase db = getReadableDatabase();
+            Cursor cursor = db.query(TABLE_NAME, null, null, null, null, null, null);
+            if (cursor==null){
+                return caches;
+            }
+            int count = cursor.getCount();
+            if (count <=0){
+                cursor.close();
+                return caches;
+            }
+            cursor.moveToFirst();
+            while (!cursor.isAfterLast()){
+                caches.add(toModel(cursor));
+                cursor.moveToNext();
+            }
+            cursor.close();
+            return caches;
+        }
+
+        @Nullable
+        public CacheModel query(String name){
+            if (TextUtils.isEmpty(name)){
+                return null;
+            }
+            SQLiteDatabase db = getReadableDatabase();
+            Cursor cursor = db.query(TABLE_NAME, null, "name = ?", new String[]{name}, null, null, null);
+            if (cursor==null){
+                return null;
+            }
+            if (cursor.getCount()<=0){
+                cursor.close();
+                return null;
+            }
+            cursor.moveToFirst();
+            CacheModel cacheModel = toModel(cursor);
+            cursor.close();
+            return cacheModel;
+
+        }
+
+        private boolean update(CacheModel cache){
+            if (cache==null){
+                return false;
+            }
+            SQLiteDatabase db = getWritableDatabase();
+            Cursor cursor = db.query(TABLE_NAME, new String[]{"name"}, "name = ?", new String[]{cache.name}, null, null, null);
+            if (cursor==null){
+                return false;
+            }else {
+                int count = cursor.getCount();
+                cursor.close();
+                if (count <=0) {
+                    return false;
+                }
+                db.beginTransaction();
+                int update = 0;
+                try {
+                    update = db.update(TABLE_NAME, toContentValues(cache), "name = ?", new String[]{cache.name});
+                    db.setTransactionSuccessful();
+                }catch (Exception e){
+                    e.printStackTrace();
+                }finally {
+                    db.endTransaction();
+                }
+                return update > 0;
+            }
+        }
+        private boolean insert(CacheModel cache){
+            if (cache==null){
+                return false;
+            }
+            boolean success = false;
+            SQLiteDatabase db = getWritableDatabase();
+            db.beginTransaction();
+            try {
+                long diff = db.insert(TABLE_NAME, null, toContentValues(cache));
+                if (diff>0){
+                    success = true;
+                }
+                db.setTransactionSuccessful();
+            }catch (Exception e){
+                e.printStackTrace();
+            }finally {
+                db.endTransaction();
+            }
+            return success;
+        }
+
+        private CacheModel toModel(Cursor cursor){
+            CacheModel cache = new CacheModel();
+            if (cursor!=null){
+                cache.name = cursor.getString(cursor.getColumnIndex("name"));
+                cache.createTime = cursor.getLong(cursor.getColumnIndex("createTime"));
+                cache.expireTime = cursor.getLong(cursor.getColumnIndex("expireTime"));
+                cache.size = cursor.getLong(cursor.getColumnIndex("size"));
+                cache.lastVisitTime = cursor.getLong(cursor.getColumnIndex("lastVisitTime"));
+            }
+            return cache;
+        }
+        private ContentValues toContentValues(CacheModel cache){
+            ContentValues contentValues = new ContentValues();
+            if (cache!=null){
+                contentValues.put("name",cache.name);
+                contentValues.put("size",cache.size);
+                contentValues.put("createTime",cache.createTime);
+                contentValues.put("expireTime",cache.expireTime);
+                contentValues.put("lastVisitTime",cache.lastVisitTime);
+            }
+            return contentValues;
+        }
+
         @Override
         public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
 
+        }
+    }
+
+    static class CacheModel{
+        public CacheModel(){
+
+        }
+        public  CacheModel(String name){
+            this.name = name;
+        }
+        String name;
+        long size;
+        long createTime;
+        long expireTime;
+        long lastVisitTime;
+
+        @Override
+        public String toString() {
+            return "CacheModel{" +
+                    "name='" + name + '\'' +
+                    ", size=" + size +
+                    ", createTime=" + createTime +
+                    ", expireTime=" + expireTime +
+                    ", lastVisitTime=" + lastVisitTime +
+                    '}';
         }
     }
 
