@@ -171,11 +171,11 @@ public class ACache {
      * @param saveTime 保存的时间，单位：秒
      */
     public void put(String key, String value, int saveTime) {
-        put(key, value.getBytes(Charset.forName("UTF-8")),saveTime);
+        put(key, value.getBytes(Charset.forName("UTF-8")), saveTime);
     }
 
-    public void putWithExtensibleTime(String key,String value,int liveTime){
-        putWithExtensibleTime(key,value.getBytes(Charset.forName("UTF-8")),liveTime);
+    public void putWithExtensibleTime(String key, String value, int liveTime) {
+        putWithExtensibleTime(key, value.getBytes(Charset.forName("UTF-8")), liveTime);
     }
 
     /**
@@ -186,10 +186,10 @@ public class ACache {
      */
     public String getAsString(String key) {
         byte[] bytes = getAsBinary(key);
-        if (bytes==null){
+        if (bytes == null) {
             return null;
         }
-        return new String(bytes,Charset.forName("UTF-8"));
+        return new String(bytes, Charset.forName("UTF-8"));
     }
 
     public long getAsCacheTime(String key) {
@@ -197,7 +197,7 @@ public class ACache {
         File file = file(key);
         if (file != null && file.exists()) {
             CacheModel model = mCache.cacheMap.get(file.getName());
-            if (model!=null){
+            if (model != null) {
                 return model.lastVisitTime;
             }
         }
@@ -216,15 +216,15 @@ public class ACache {
      * @param value 保存的数据
      */
     public boolean put(String key, byte[] value) {
-        return put(key, value,0,LiveType.FOREVER);
+        return put(key, value, 0, LiveType.FOREVER);
     }
 
-    public boolean put(String key,byte[] value,int liveTime){
-        return put(key, value, liveTime,LiveType.ONCE);
+    public boolean put(String key, byte[] value, int liveTime) {
+        return put(key, value, liveTime, LiveType.ONCE);
     }
 
-    public boolean putWithExtensibleTime(String key,byte[] value,int extendTime){
-        return put(key,value,extendTime,LiveType.EXTEND_PER_VISIT);
+    public boolean putWithExtensibleTime(String key, byte[] value, int extendTime) {
+        return put(key, value, extendTime, LiveType.EXTEND_PER_VISIT);
     }
 
     /**
@@ -234,7 +234,7 @@ public class ACache {
      * @param value    保存的数据
      * @param liveTime 保存的时间，单位：秒
      */
-    private boolean put(String key, byte[] value, int liveTime,int liveType) {
+    private boolean put(String key, byte[] value, int liveTime, int liveType) {
         boolean ret = false;
         File file = mCache.newFile(key);
         FileOutputStream out = null;
@@ -256,7 +256,7 @@ public class ACache {
             }
             CacheModel cacheModel = new CacheModel(file.getName());
             cacheModel.liveType = liveType;
-            cacheModel.liveTime = liveTime;
+            cacheModel.liveTime = liveTime * 1000;
             mCache.put(file, cacheModel);
         }
         return ret;
@@ -273,7 +273,7 @@ public class ACache {
         boolean removeFile = false;
         try {
             File file = mCache.get(key);
-            if (file==null){
+            if (file == null) {
                 return null;
             }
             if (!file.exists())
@@ -375,20 +375,27 @@ public class ACache {
             File db = new File(dbFile);
             if (!db.exists()) {
                 // 转换旧数据
-                executor.submit(new ConvertRunnable(cacheDir, helper));
+                Runnable task = new ConvertRunnable(cacheDir, helper);
+                task.run();
+//                executor.submit(task);
             }
             // 更新数据库
-            executor.submit(new UpdateDatabaseRunnable(cacheDir,helper));
+            UpdateDatabaseRunnable task = new UpdateDatabaseRunnable(cacheDir, helper);
+            task.run();
+//            executor.submit(task);
 
-            executor.submit(new Runnable() {
+            Runnable runnable = new Runnable() {
                 @Override
                 public void run() {
                     List<CacheModel> caches = helper.queryAll();
                     for (CacheModel cache : caches) {
                         cacheMap.put(cache.name, cache);
                     }
+                    Log.d(TAG, "run: 内存缓存准备完成....");
                 }
-            });
+            };
+            runnable.run();
+//            executor.submit(runnable);
 
             calculateCacheSizeAndCacheCount();
 
@@ -399,7 +406,7 @@ public class ACache {
          * 计算 cacheSize和cacheCount
          */
         private void calculateCacheSizeAndCacheCount() {
-            executor.submit(new Runnable() {
+            Runnable runnable = new Runnable() {
                 @Override
                 public void run() {
                     int size = 0;
@@ -418,11 +425,14 @@ public class ACache {
                         cacheSize.set(size);
                         cacheCount.set(count);
                     }
+                    Log.d(TAG, "run: 缓存大小数量初始化完成.... ");
                 }
-            });
+            };
+            runnable.run();
+//            executor.submit(runnable);
         }
 
-        private boolean put(File file,CacheModel cacheModel) {
+        private boolean put(File file, CacheModel cacheModel) {
             int curCacheCount = cacheCount.get();
             while (curCacheCount + 1 > countLimit) {
                 long freedSize = removeNext();
@@ -440,6 +450,7 @@ public class ACache {
             }
             cacheSize.addAndGet(valueSize);
             Long currentTime = System.currentTimeMillis();
+            cacheModel.createTime = currentTime;
             cacheModel.lastVisitTime = currentTime;
             cacheModel.name = file.getName();
             insertOrUpdateDatabase(cacheModel);
@@ -449,8 +460,8 @@ public class ACache {
             return true;
         }
 
-        private void insertOrUpdateDatabase(final CacheModel cache){
-            cacheMap.put(cache.name,cache);
+        private void insertOrUpdateDatabase(final CacheModel cache) {
+            cacheMap.put(cache.name, cache);
             executor.submit(new Runnable() {
                 @Override
                 public void run() {
@@ -460,7 +471,7 @@ public class ACache {
             });
         }
 
-        private void deleteFromDatabase(final String name){
+        private void deleteFromDatabase(final String name) {
             cacheMap.remove(name);
             executor.submit(new Runnable() {
                 @Override
@@ -470,13 +481,13 @@ public class ACache {
             });
         }
 
-        private void clearDatabase(){
+        private void clearDatabase() {
             cacheMap.clear();
             executor.submit(new Runnable() {
                 @Override
                 public void run() {
                     int clear = helper.clear();
-                    Log.d(TAG, "run: clear database:"+clear);
+                    Log.d(TAG, "run: clear database:" + clear);
                 }
             });
         }
@@ -486,18 +497,19 @@ public class ACache {
             String name = file.getName();
             CacheModel model = cacheMap.get(name);
             Long currentTime = System.currentTimeMillis();
-            if (model!=null){
-                if (model.liveType==LiveType.ONCE){
-                    if (model.createTime+model.liveTime>currentTime) {
-                        if (file.exists()){
+            if (model != null) {
+                Log.d(TAG, "get: key:" + key + "->" + model);
+                if (model.liveType == LiveType.ONCE) {
+                    if (model.createTime + model.liveTime < currentTime) {
+                        if (file.exists()) {
                             file.delete();
                         }
                         deleteFromDatabase(name);
                         return null;
                     }
-                }else if (model.liveType==LiveType.EXTEND_PER_VISIT){
-                    if (model.lastVisitTime+model.liveTime>currentTime) {
-                        if (file.exists()){
+                } else if (model.liveType == LiveType.EXTEND_PER_VISIT) {
+                    if (model.lastVisitTime + model.liveTime < currentTime) {
+                        if (file.exists()) {
                             file.delete();
                         }
                         deleteFromDatabase(name);
@@ -518,7 +530,7 @@ public class ACache {
 
         private boolean remove(String key) {
             File image = get(key);
-            if (image==null){
+            if (image == null) {
                 return true;
             }
             deleteFromDatabase(image.getName());
@@ -722,7 +734,7 @@ public class ACache {
         }
     }
 
-    class UpdateDatabaseRunnable implements Runnable{
+    class UpdateDatabaseRunnable implements Runnable {
         File cacheDir;
         CacheDatabaseHelper helper;
 
@@ -737,10 +749,10 @@ public class ACache {
             // 删除无效记录
             for (int i = 0; i < caches.size(); i++) {
                 CacheModel cacheModel = caches.get(i);
-                File file = new File(cacheDir,cacheModel.name);
-                if (!file.exists()){
+                File file = new File(cacheDir, cacheModel.name);
+                if (!file.exists()) {
                     int delete = helper.delete(cacheModel.name);
-                    Log.d(TAG, "run: delete:"+delete);
+                    Log.d(TAG, "run: delete:" + delete);
                 }
             }
             File[] files = cacheDir.listFiles(new FilenameFilter() {
@@ -752,7 +764,7 @@ public class ACache {
             // 记录遗失缓存
             for (File file : files) {
                 CacheModel model = helper.query(file.getName());
-                if (model==null){
+                if (model == null) {
                     CacheModel cache = new CacheModel(file.getName());
                     cache.liveType = LiveType.ONCE;
                     cache.createTime = System.currentTimeMillis();
@@ -762,6 +774,7 @@ public class ACache {
                     helper.insert(cache);
                 }
             }
+            Log.d(TAG, "run: 更新数据库完成.... ");
         }
     }
 
@@ -838,7 +851,7 @@ public class ACache {
                 }
             }
             int updateCount = helper.updateAll(caches);
-            Log.d(TAG, "run: updateCache Count:" + updateCount);
+            Log.d(TAG, "run: 整理完成 ... updateCache Count:" + updateCount);
         }
     }
 
@@ -1004,22 +1017,22 @@ public class ACache {
             return success;
         }
 
-        private int clear(){
+        private int clear() {
             int count = 0;
             SQLiteDatabase db = getWritableDatabase();
             try {
                 count = db.delete(TABLE_NAME, null, null);
                 db.setTransactionSuccessful();
-            }catch (Exception e){
+            } catch (Exception e) {
                 e.printStackTrace();
-            }finally {
+            } finally {
                 db.endTransaction();
             }
             return count;
         }
 
-        private int delete(String name){
-            if (TextUtils.isEmpty(name)){
+        private int delete(String name) {
+            if (TextUtils.isEmpty(name)) {
                 return 0;
             }
             int ret = 0;
@@ -1028,12 +1041,12 @@ public class ACache {
             try {
                 ret = db.delete(TABLE_NAME, "name = ?", new String[]{name});
                 db.setTransactionSuccessful();
-            }catch (Exception e){
+            } catch (Exception e) {
                 e.printStackTrace();
-            }finally {
+            } finally {
                 db.endTransaction();
             }
-            Log.d(TAG, "delete: "+name+" -> "+ret);
+            Log.d(TAG, "delete: " + name + " -> " + ret);
             return ret;
         }
 

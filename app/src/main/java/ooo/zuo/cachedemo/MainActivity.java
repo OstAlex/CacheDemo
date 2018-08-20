@@ -15,6 +15,7 @@ import ooo.zuo.cachedemo.cache.CacheUtils;
 
 public class MainActivity extends AppCompatActivity {
 
+    long time ;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -24,13 +25,14 @@ public class MainActivity extends AppCompatActivity {
             button.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
-                    CacheUtils.putString("key","qwertyuioioplkjhgfdsazxcvbnm",5);
-                    CacheUtils.putString("123","qwertyuioiosdfgadgplkjhgfdsazxcvbnm",1);
-                    CacheUtils.putString("234","adgqrhwrhsfhar",43);
-                    CacheUtils.putString("345","htsqregadgrh",60);
-                    CacheUtils.putString("456","hrwewergsdg",3);
-                    CacheUtils.putString("567","hwhrhwerafghrhr");
-                    CacheUtils.putString("678","加油向未来！！！Come On ！");
+                    time = System.currentTimeMillis();
+                    CacheUtils.putString("123","gfshargfg",6);
+                    CacheUtils.putString("234","g三国杀好人好事a2342fdgdg",19);
+                    CacheUtils.putString("345","hts分公司发过火qregadgrh",24);
+                    CacheUtils.putString("456","发货sgsghs蛋糕师傅速度发货",13);
+                    CacheUtils.putString("567","hwhrhwera挨个fghrhr");
+                    CacheUtils.putString("678","sfghrafhr加油向未来！！！Come On ！");
+                    CacheUtils.putWithExtensibleTime("789","lalalalalalalala",5);
 
                     toast("缓存成功");
                 }
@@ -47,6 +49,8 @@ public class MainActivity extends AppCompatActivity {
                     builder.append("456").append("->").append(CacheUtils.getString("456")).append("\n");
                     builder.append("567").append("->").append(CacheUtils.getString("567")).append("\n");
                     builder.append("678").append("->").append(CacheUtils.getString("678")).append("\n");
+                    builder.append("789").append("->").append(CacheUtils.getString("789")).append("\n");
+                    builder.append((System.currentTimeMillis()-time)/1000);
                     textView.setText(builder.toString());
                 }
             });
