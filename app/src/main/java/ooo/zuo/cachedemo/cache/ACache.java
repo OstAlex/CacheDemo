@@ -842,7 +842,7 @@ public class ACache {
                             cache.liveTime = expireTime;
                             cache.lastVisitTime = lastVisitTime;
                             cache.size = cachedFile.length();
-                            cache.liveType = LiveType.ONCE;
+                            cache.liveType = LiveType.FOREVER;
                             caches.add(cache);
                         }
                     } catch (Exception e) {
