@@ -18,6 +18,12 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         if (initCache()) {
             CacheUtils.putString("key","qwertyuioioplkjhgfdsazxcvbnm",5);
+            CacheUtils.putString("123","qwertyuioiosdfgadgplkjhgfdsazxcvbnm",1);
+            CacheUtils.putString("234","adgqrhwrhsfhar",43);
+            CacheUtils.putString("345","htsqregadgrh",60);
+            CacheUtils.putString("456","hrwewergsdg",3);
+            CacheUtils.putString("567","hwhrhwerafghrhr");
+            CacheUtils.putString("678","加油向未来！！！Come On ！");
             toast("缓存成功");
         }
 
