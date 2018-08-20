@@ -15,7 +15,6 @@
  */
 package ooo.zuo.cachedemo.cache;
 
-import android.app.Application;
 import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
@@ -52,14 +51,20 @@ import java.io.OutputStream;
 import java.io.RandomAccessFile;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+
+import static ooo.zuo.cachedemo.cache.ACache.CacheDatabaseHelper.DatabaseName;
 
 /**
  * @author Michael Yang（www.yangfuhai.com） update at 2013.08.07
@@ -79,26 +84,28 @@ public class ACache {
 
     /**
      * 初始化
+     *
      * @param cachePath 缓存路径
      * @param cacheName 缓存文件夹名称
      */
     public static void init(String cachePath, String cacheName) {
         mCachePath = cachePath;
         mCacheName = cacheName;
-        Log.d(TAG, "init: path:"+mCachePath+" name:"+mCacheName);
+        Log.d(TAG, "init: path:" + mCachePath + " name:" + mCacheName);
     }
 
     /**
      * 初始化
+     *
      * @param cachePath 缓存路径
      * @param cacheName 缓存文件夹名称
-     * @param maxSize 最大缓存大小
+     * @param maxSize   最大缓存大小
      */
     public static void init(String cachePath, String cacheName, int maxSize) {
         mCachePath = cachePath;
         mCacheName = cacheName;
         MAX_SIZE = maxSize;
-        Log.d(TAG, "init: path:"+mCachePath+" name:"+mCacheName);
+        Log.d(TAG, "init: path:" + mCachePath + " name:" + mCacheName);
     }
 
     public static ACache get(Context ctx) {
@@ -107,22 +114,22 @@ public class ACache {
 
     public static ACache get(Context ctx, String cacheName) {
         File f = new File(mCachePath, cacheName);
-        return get(ctx,f, MAX_SIZE, MAX_COUNT);
+        return get(ctx, f, MAX_SIZE, MAX_COUNT);
     }
 
-    public static ACache get(Context context,File cacheDir) {
-        return get(context,cacheDir, MAX_SIZE, MAX_COUNT);
+    public static ACache get(Context context, File cacheDir) {
+        return get(context, cacheDir, MAX_SIZE, MAX_COUNT);
     }
 
     public static ACache get(Context ctx, long max_zise, int max_count) {
         File f = new File(mCachePath, "cache");
-        return get(ctx,f, max_zise, max_count);
+        return get(ctx, f, max_zise, max_count);
     }
 
     public static ACache get(Context context, File cacheDir, long max_zise, int max_count) {
         ACache manager = mInstanceMap.get(cacheDir.getAbsoluteFile() + myPid());
         if (manager == null) {
-            manager = new ACache(context,cacheDir, max_zise, max_count);
+            manager = new ACache(context, cacheDir, max_zise, max_count);
             mInstanceMap.put(cacheDir.getAbsolutePath() + myPid(), manager);
         }
         return manager;
@@ -132,18 +139,18 @@ public class ACache {
         return "_" + android.os.Process.myPid();
     }
 
-    private ACache(Context context,File cacheDir, long max_size, int max_count) {
+    private ACache(Context context, File cacheDir, long max_size, int max_count) {
         if (!cacheDir.exists() && !cacheDir.mkdirs()) {
             throw new RuntimeException("can't make dirs in " + cacheDir.getAbsolutePath());
         }
-        mCache = new ACacheManager(context,cacheDir, max_size, max_count);
+        mCache = new ACacheManager(context, cacheDir, max_size, max_count);
     }
 
     /**
      * Provides a means to save a cached file before the data are available.
      * Since writing about the file is complete, and its close method is called,
      * its contents will be registered in the cache. Example of use:
-     *
+     * <p>
      * ACache cache = new ACache(this) try { OutputStream stream =
      * cache.put("myFileName") stream.write("some bytes".getBytes()); // now
      * update cache! stream.close(); } catch(FileNotFoundException e){
@@ -170,10 +177,8 @@ public class ACache {
     /**
      * 保存 String数据 到 缓存中
      *
-     * @param key
-     *            保存的key
-     * @param value
-     *            保存的String数据
+     * @param key   保存的key
+     * @param value 保存的String数据
      */
     public void put(String key, String value) {
         File file = mCache.newFile(key);
@@ -199,12 +204,9 @@ public class ACache {
     /**
      * 保存 String数据 到 缓存中
      *
-     * @param key
-     *            保存的key
-     * @param value
-     *            保存的String数据
-     * @param saveTime
-     *            保存的时间，单位：秒
+     * @param key      保存的key
+     * @param value    保存的String数据
+     * @param saveTime 保存的时间，单位：秒
      */
     public void put(String key, String value, int saveTime) {
         put(key, Utils.newStringWithDateInfo(saveTime, value));
@@ -251,9 +253,9 @@ public class ACache {
         }
     }
 
-    public long getAsCacheTime(String key){
-        File file =file(key);
-        if (file!=null && file.exists()){
+    public long getAsCacheTime(String key) {
+        File file = file(key);
+        if (file != null && file.exists()) {
             return file.lastModified();
         }
         return -1;
@@ -266,10 +268,8 @@ public class ACache {
     /**
      * 保存 JSONObject数据 到 缓存中
      *
-     * @param key
-     *            保存的key
-     * @param value
-     *            保存的JSON数据
+     * @param key   保存的key
+     * @param value 保存的JSON数据
      */
     public void put(String key, JSONObject value) {
         put(key, value.toString());
@@ -278,12 +278,9 @@ public class ACache {
     /**
      * 保存 JSONObject数据 到 缓存中
      *
-     * @param key
-     *            保存的key
-     * @param value
-     *            保存的JSONObject数据
-     * @param saveTime
-     *            保存的时间，单位：秒
+     * @param key      保存的key
+     * @param value    保存的JSONObject数据
+     * @param saveTime 保存的时间，单位：秒
      */
     public void put(String key, JSONObject value, int saveTime) {
         put(key, value.toString(), saveTime);
@@ -313,10 +310,8 @@ public class ACache {
     /**
      * 保存 JSONArray数据 到 缓存中
      *
-     * @param key
-     *            保存的key
-     * @param value
-     *            保存的JSONArray数据
+     * @param key   保存的key
+     * @param value 保存的JSONArray数据
      */
     public void put(String key, JSONArray value) {
         put(key, value.toString());
@@ -325,12 +320,9 @@ public class ACache {
     /**
      * 保存 JSONArray数据 到 缓存中
      *
-     * @param key
-     *            保存的key
-     * @param value
-     *            保存的JSONArray数据
-     * @param saveTime
-     *            保存的时间，单位：秒
+     * @param key      保存的key
+     * @param value    保存的JSONArray数据
+     * @param saveTime 保存的时间，单位：秒
      */
     public void put(String key, JSONArray value, int saveTime) {
         put(key, value.toString(), saveTime);
@@ -360,10 +352,8 @@ public class ACache {
     /**
      * 保存 byte数据 到 缓存中
      *
-     * @param key
-     *            保存的key
-     * @param value
-     *            保存的数据
+     * @param key   保存的key
+     * @param value 保存的数据
      */
     public void put(String key, byte[] value) {
         File file = mCache.newFile(key);
@@ -389,23 +379,18 @@ public class ACache {
     /**
      * Cache for a stream
      *
-     * @param key
-     *            the file name.
+     * @param key the file name.
      * @return OutputStream stream for writing data.
-     * @throws FileNotFoundException
-     *             if the file can not be created.
+     * @throws FileNotFoundException if the file can not be created.
      */
     public OutputStream put(String key) throws FileNotFoundException {
         return new xFileOutputStream(mCache.newFile(key));
     }
 
     /**
-     *
-     * @param key
-     *            the file name.
+     * @param key the file name.
      * @return (InputStream or null) stream previously saved in cache.
-     * @throws FileNotFoundException
-     *             if the file can not be opened
+     * @throws FileNotFoundException if the file can not be opened
      */
     public InputStream get(String key) throws FileNotFoundException {
         File file = mCache.get(key);
@@ -417,12 +402,9 @@ public class ACache {
     /**
      * 保存 byte数据 到 缓存中
      *
-     * @param key
-     *            保存的key
-     * @param value
-     *            保存的数据
-     * @param saveTime
-     *            保存的时间，单位：秒
+     * @param key      保存的key
+     * @param value    保存的数据
+     * @param saveTime 保存的时间，单位：秒
      */
     public void put(String key, byte[] value, int saveTime) {
         put(key, Utils.newByteArrayWithDateInfo(saveTime, value));
@@ -473,10 +455,8 @@ public class ACache {
     /**
      * 保存 Serializable数据 到 缓存中
      *
-     * @param key
-     *            保存的key
-     * @param value
-     *            保存的value
+     * @param key   保存的key
+     * @param value 保存的value
      */
     public void put(String key, Serializable value) {
         put(key, value, -1);
@@ -485,12 +465,9 @@ public class ACache {
     /**
      * 保存 Serializable数据到 缓存中
      *
-     * @param key
-     *            保存的key
-     * @param value
-     *            保存的value
-     * @param saveTime
-     *            保存的时间，单位：秒
+     * @param key      保存的key
+     * @param value    保存的value
+     * @param saveTime 保存的时间，单位：秒
      */
     public void put(String key, Serializable value, int saveTime) {
         ByteArrayOutputStream baos = null;
@@ -560,10 +537,8 @@ public class ACache {
     /**
      * 保存 bitmap 到 缓存中
      *
-     * @param key
-     *            保存的key
-     * @param value
-     *            保存的bitmap数据
+     * @param key   保存的key
+     * @param value 保存的bitmap数据
      */
     public void put(String key, Bitmap value) {
         put(key, Utils.Bitmap2Bytes(value));
@@ -572,12 +547,9 @@ public class ACache {
     /**
      * 保存 bitmap 到 缓存中
      *
-     * @param key
-     *            保存的key
-     * @param value
-     *            保存的 bitmap 数据
-     * @param saveTime
-     *            保存的时间，单位：秒
+     * @param key      保存的key
+     * @param value    保存的 bitmap 数据
+     * @param saveTime 保存的时间，单位：秒
      */
     public void put(String key, Bitmap value, int saveTime) {
         put(key, Utils.Bitmap2Bytes(value), saveTime);
@@ -603,10 +575,8 @@ public class ACache {
     /**
      * 保存 drawable 到 缓存中
      *
-     * @param key
-     *            保存的key
-     * @param value
-     *            保存的drawable数据
+     * @param key   保存的key
+     * @param value 保存的drawable数据
      */
     public void put(String key, Drawable value) {
         put(key, Utils.drawable2Bitmap(value));
@@ -615,12 +585,9 @@ public class ACache {
     /**
      * 保存 drawable 到 缓存中
      *
-     * @param key
-     *            保存的key
-     * @param value
-     *            保存的 drawable 数据
-     * @param saveTime
-     *            保存的时间，单位：秒
+     * @param key      保存的key
+     * @param value    保存的 drawable 数据
+     * @param saveTime 保存的时间，单位：秒
      */
     public void put(String key, Drawable value, int saveTime) {
         put(key, Utils.drawable2Bitmap(value), saveTime);
@@ -669,10 +636,14 @@ public class ACache {
         mCache.clear();
     }
 
+    public void updateCache() {
+        mCache.createOrUpdateDatabase();
+    }
+
     /**
-     * @title 缓存管理器
      * @author 杨福海（michael） www.yangfuhai.com
      * @version 1.0
+     * @title 缓存管理器
      */
     public class ACacheManager {
         private final AtomicLong cacheSize;
@@ -680,43 +651,58 @@ public class ACache {
         private final long sizeLimit;
         private final int countLimit;
         private final Map<File, Long> lastUsageDates = Collections.synchronizedMap(new HashMap<File, Long>());
+        private final ExecutorService executor;
+        private boolean isInit = false;
         protected File cacheDir;
+        private CacheDatabaseHelper helper;
+        private Map<String, CacheModel> cacheMap = new HashMap<>();
         private Context context;
 
-        private ACacheManager(Context context,File cacheDir, long sizeLimit, int countLimit) {
+        private ACacheManager(Context context, File cacheDir, long sizeLimit, int countLimit) {
             this.context = context.getApplicationContext();
             this.cacheDir = cacheDir;
             this.sizeLimit = sizeLimit;
             this.countLimit = countLimit;
             cacheSize = new AtomicLong();
             cacheCount = new AtomicInteger();
+            executor = Executors.newSingleThreadExecutor();
+            helper = new CacheDatabaseHelper(context);
+//            createOrUpdateDatabase();
             calculateCacheSizeAndCacheCount();
-            createDatabase();
         }
 
-        private void createDatabase(){
-            CacheDatabaseHelper helper = new CacheDatabaseHelper(context);
-            SQLiteDatabase database = helper.getWritableDatabase();
-            String path = database.getPath();
-            Log.d(TAG, "createDatabase: "+path);
-            helper.insert(new CacheModel("123"));
-            helper.insert(new CacheModel("456"));
-            helper.insert(new CacheModel("789"));
-            helper.insert(new CacheModel("001"));
-
-            CacheModel cache = new CacheModel("123");
-            cache.size = 1L;
-            helper.update(cache);
-            cache.lastVisitTime = System.currentTimeMillis();
-            helper.insertOrUpdate(cache);
-
-            CacheModel model = helper.query("123");
-            Log.d(TAG, "createDatabase: "+model);
-            List<CacheModel> cacheModels = helper.queryAll();
-            Log.d(TAG, "createDatabase: _________________________");
-            for (CacheModel cacheModel : cacheModels) {
-                Log.d(TAG, "createDatabase: "+cacheModel);
+        @Override
+        protected void finalize() throws Throwable {
+            try {
+                if (helper != null) {
+                    helper.close();
+                }
+            } finally {
+                super.finalize();
             }
+        }
+
+        private void createOrUpdateDatabase() {
+            String dbFile = mCachePath + File.separator + mCacheName + File.separator + DatabaseName;
+            File db = new File(dbFile);
+            if (!db.exists()) {
+                executor.submit(new ConvertRunnable(cacheDir, helper));
+            }
+            executor.submit(new Runnable() {
+                @Override
+                public void run() {
+
+                }
+            });
+            executor.submit(new Runnable() {
+                @Override
+                public void run() {
+                    List<CacheModel> caches = helper.queryAll();
+                    for (CacheModel cache : caches) {
+                        cacheMap.put(cache.name, cache);
+                    }
+                }
+            });
 
 
         }
@@ -733,6 +719,10 @@ public class ACache {
                     File[] cachedFiles = cacheDir.listFiles();
                     if (cachedFiles != null) {
                         for (File cachedFile : cachedFiles) {
+                            String name = cachedFile.getName();
+                            if (name.endsWith(".db") || name.endsWith(".db-journal")) {
+                                continue;
+                            }
                             size += calculateSize(cachedFile);
                             count += 1;
                             lastUsageDates.put(cachedFile, cachedFile.lastModified());
@@ -837,9 +827,9 @@ public class ACache {
     }
 
     /**
-     * @title 时间计算工具类
      * @author 杨福海（michael） www.yangfuhai.com
      * @version 1.0
+     * @title 时间计算工具类
      */
     private static class Utils {
 
@@ -1000,74 +990,169 @@ public class ACache {
         }
     }
 
+
+    /**
+     * 处理旧缓存
+     */
+    class ConvertRunnable implements Runnable {
+        File cacheDir;
+        CacheDatabaseHelper helper;
+
+        public ConvertRunnable(File cacheDir, CacheDatabaseHelper helper) {
+            this.cacheDir = cacheDir;
+            this.helper = helper;
+        }
+
+        @Override
+        public void run() {
+            // 没有数据库,整理旧缓存
+            File[] cachedFiles = cacheDir.listFiles();
+            List<CacheModel> caches = new ArrayList<>();
+            if (cachedFiles != null) {
+                for (File cachedFile : cachedFiles) {
+                    try {
+                        long createTime = System.currentTimeMillis();
+                        long lastVisitTime = cachedFile.lastModified();
+                        long expireTime = 0;
+                        ByteArrayOutputStream stream = new ByteArrayOutputStream();
+                        FileInputStream inputStream = new FileInputStream(cachedFile);
+                        byte[] bytes = new byte[4096];
+                        int read = inputStream.read(bytes);
+                        while (read > -1) {
+                            stream.write(bytes, 0, read);
+                            read = inputStream.read(bytes);
+                        }
+                        inputStream.close();
+                        byte[] data = stream.toByteArray();
+                        if (Utils.hasDateInfo(data)) {
+                            String[] date = Utils.getDateInfoFromDate(data);
+                            if (date != null && date.length == 2) {
+                                String saveTimeStr = date[0];
+                                while (saveTimeStr.startsWith("0")) {
+                                    saveTimeStr = saveTimeStr.substring(1, saveTimeStr.length());
+                                }
+                                createTime = Long.valueOf(saveTimeStr);
+                                expireTime = Long.valueOf(date[1]);
+                            }
+                            data = Utils.clearDateInfo(data);
+
+                            if (cachedFile.delete() && cachedFile.createNewFile()) {
+                                FileOutputStream outputStream = new FileOutputStream(cachedFile);
+                                outputStream.write(data);
+                                outputStream.close();
+                                CacheModel cache = new CacheModel(cachedFile.getName());
+                                cache.createTime = createTime;
+                                cache.lastVisitTime = lastVisitTime;
+                                cache.liveTime = expireTime * 1000;
+                                cache.size = data.length;
+                                cache.liveType = LiveType.ONCE;
+                                caches.add(cache);
+                            }
+
+                        } else {
+                            CacheModel cache = new CacheModel(cachedFile.getName());
+                            cache.createTime = createTime;
+                            cache.liveTime = expireTime;
+                            cache.lastVisitTime = lastVisitTime;
+                            cache.size = cachedFile.length();
+                            cache.liveType = LiveType.ONCE;
+                            caches.add(cache);
+                        }
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+            int updateCount = helper.updateAll(caches);
+            Log.d(TAG, "run: updateCache Count:" + updateCount);
+        }
+    }
+
     /**
      * 缓存数据库
      */
-    class CacheDatabaseHelper extends SQLiteOpenHelper{
+    class CacheDatabaseHelper extends SQLiteOpenHelper {
         private static final int VERSION = 1;
-        private static final String DatabaseName = ".cache_database.db";
+        static final String DatabaseName = ".cache_database.db";
         private static final String TABLE_NAME = "cache";
 
 
         public CacheDatabaseHelper(Context context) {
-            super(context, mCachePath+File.separator+mCacheName+File.separator+DatabaseName, null, VERSION);
+            super(context, mCachePath + File.separator + mCacheName + File.separator + DatabaseName, null, VERSION);
         }
 
         @Override
         public void onCreate(SQLiteDatabase db) {
-            String sql = "create table "+TABLE_NAME+" ( " +
+            String sql = "create table " + TABLE_NAME + " ( " +
                     "name text," +
                     "size long," +
                     "createTime long," +
-                    "expireTime long," +
+                    "liveTime long," +
                     "lastVisitTime long," +
+                    "liveType int," +
                     "primary key(\"name\")" +
                     " )";
             db.beginTransaction();
             try {
                 db.execSQL(sql);
                 db.setTransactionSuccessful();
-            }catch (Exception e){
+            } catch (Exception e) {
                 e.printStackTrace();
-            }finally {
+            } finally {
                 db.endTransaction();
             }
         }
 
-        public boolean insertOrUpdate(CacheModel cache){
-            if (cache==null|| TextUtils.isEmpty(cache.name)){
-                return false;
-            }
-            SQLiteDatabase db = getWritableDatabase();
 
-            Cursor cursor = db.query(TABLE_NAME, new String[]{"name"}, "name = ?", new String[]{cache.name}, null, null, null);
-            if (cursor==null){
-                return insert(cache);
-            }else {
-                int count = cursor.getCount();
-                cursor.close();
-                if (count >0) {
-                    return update(cache);
-                }else {
-                    return insert(cache);
-                }
+        public int updateAll(Collection<CacheModel> caches) {
+            Iterator<CacheModel> iterator = caches.iterator();
+            int count = 0;
+            while (iterator.hasNext()) {
+                CacheModel cache = iterator.next();
+                count += insertOrUpdate(cache) ? 1 : 0;
             }
+            return count;
         }
 
-        public List<CacheModel> queryAll(){
+        public boolean insertOrUpdate(CacheModel cache) {
+            if (cache == null || TextUtils.isEmpty(cache.name)) {
+                return false;
+            }
+            try {
+                SQLiteDatabase db = getWritableDatabase();
+
+                Cursor cursor = db.query(TABLE_NAME, new String[]{"name"}, "name = ?", new String[]{cache.name}, null, null, null);
+                if (cursor == null) {
+                    return insert(cache);
+                } else {
+                    int count = cursor.getCount();
+                    cursor.close();
+                    if (count > 0) {
+                        return update(cache);
+                    } else {
+                        return insert(cache);
+                    }
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            return false;
+        }
+
+        public List<CacheModel> queryAll() {
             List<CacheModel> caches = new ArrayList<>();
             SQLiteDatabase db = getReadableDatabase();
             Cursor cursor = db.query(TABLE_NAME, null, null, null, null, null, null);
-            if (cursor==null){
+            if (cursor == null) {
                 return caches;
             }
             int count = cursor.getCount();
-            if (count <=0){
+            if (count <= 0) {
                 cursor.close();
                 return caches;
             }
             cursor.moveToFirst();
-            while (!cursor.isAfterLast()){
+            while (!cursor.isAfterLast()) {
                 caches.add(toModel(cursor));
                 cursor.moveToNext();
             }
@@ -1076,16 +1161,16 @@ public class ACache {
         }
 
         @Nullable
-        public CacheModel query(String name){
-            if (TextUtils.isEmpty(name)){
+        public CacheModel query(String name) {
+            if (TextUtils.isEmpty(name)) {
                 return null;
             }
             SQLiteDatabase db = getReadableDatabase();
             Cursor cursor = db.query(TABLE_NAME, null, "name = ?", new String[]{name}, null, null, null);
-            if (cursor==null){
+            if (cursor == null) {
                 return null;
             }
-            if (cursor.getCount()<=0){
+            if (cursor.getCount() <= 0) {
                 cursor.close();
                 return null;
             }
@@ -1096,18 +1181,18 @@ public class ACache {
 
         }
 
-        private boolean update(CacheModel cache){
-            if (cache==null){
+        private boolean update(CacheModel cache) {
+            if (cache == null) {
                 return false;
             }
             SQLiteDatabase db = getWritableDatabase();
             Cursor cursor = db.query(TABLE_NAME, new String[]{"name"}, "name = ?", new String[]{cache.name}, null, null, null);
-            if (cursor==null){
+            if (cursor == null) {
                 return false;
-            }else {
+            } else {
                 int count = cursor.getCount();
                 cursor.close();
-                if (count <=0) {
+                if (count <= 0) {
                     return false;
                 }
                 db.beginTransaction();
@@ -1115,16 +1200,17 @@ public class ACache {
                 try {
                     update = db.update(TABLE_NAME, toContentValues(cache), "name = ?", new String[]{cache.name});
                     db.setTransactionSuccessful();
-                }catch (Exception e){
+                } catch (Exception e) {
                     e.printStackTrace();
-                }finally {
+                } finally {
                     db.endTransaction();
                 }
                 return update > 0;
             }
         }
-        private boolean insert(CacheModel cache){
-            if (cache==null){
+
+        private boolean insert(CacheModel cache) {
+            if (cache == null) {
                 return false;
             }
             boolean success = false;
@@ -1132,37 +1218,42 @@ public class ACache {
             db.beginTransaction();
             try {
                 long diff = db.insert(TABLE_NAME, null, toContentValues(cache));
-                if (diff>0){
+                if (diff > 0) {
                     success = true;
                 }
                 db.setTransactionSuccessful();
-            }catch (Exception e){
+            } catch (Exception e) {
                 e.printStackTrace();
-            }finally {
+            } finally {
                 db.endTransaction();
             }
             return success;
         }
 
-        private CacheModel toModel(Cursor cursor){
+
+
+        private CacheModel toModel(Cursor cursor) {
             CacheModel cache = new CacheModel();
-            if (cursor!=null){
+            if (cursor != null) {
                 cache.name = cursor.getString(cursor.getColumnIndex("name"));
                 cache.createTime = cursor.getLong(cursor.getColumnIndex("createTime"));
-                cache.expireTime = cursor.getLong(cursor.getColumnIndex("expireTime"));
+                cache.liveTime = cursor.getLong(cursor.getColumnIndex("liveTime"));
                 cache.size = cursor.getLong(cursor.getColumnIndex("size"));
                 cache.lastVisitTime = cursor.getLong(cursor.getColumnIndex("lastVisitTime"));
+                cache.liveType = cursor.getInt(cursor.getColumnIndex("liveType"));
             }
             return cache;
         }
-        private ContentValues toContentValues(CacheModel cache){
+
+        private ContentValues toContentValues(CacheModel cache) {
             ContentValues contentValues = new ContentValues();
-            if (cache!=null){
-                contentValues.put("name",cache.name);
-                contentValues.put("size",cache.size);
-                contentValues.put("createTime",cache.createTime);
-                contentValues.put("expireTime",cache.expireTime);
-                contentValues.put("lastVisitTime",cache.lastVisitTime);
+            if (cache != null) {
+                contentValues.put("name", cache.name);
+                contentValues.put("size", cache.size);
+                contentValues.put("createTime", cache.createTime);
+                contentValues.put("liveTime", cache.liveTime);
+                contentValues.put("lastVisitTime", cache.lastVisitTime);
+                contentValues.put("liveType", cache.liveType);
             }
             return contentValues;
         }
@@ -1173,18 +1264,25 @@ public class ACache {
         }
     }
 
-    static class CacheModel{
-        public CacheModel(){
+    static class CacheModel {
+        CacheModel() {
 
         }
-        public  CacheModel(String name){
+
+        CacheModel(String name) {
             this.name = name;
         }
+
         String name;
         long size;
         long createTime;
-        long expireTime;
+        long liveTime;
         long lastVisitTime;
+        /**
+         * 0 ： 一次性有效期
+         * 1 : 有效期内访问延长有效期
+         */
+        int liveType;
 
         @Override
         public String toString() {
@@ -1192,10 +1290,16 @@ public class ACache {
                     "name='" + name + '\'' +
                     ", size=" + size +
                     ", createTime=" + createTime +
-                    ", expireTime=" + expireTime +
+                    ", liveTime=" + liveTime +
                     ", lastVisitTime=" + lastVisitTime +
+                    ", liveType=" + liveType +
                     '}';
         }
+    }
+
+    static class LiveType {
+        static final int ONCE = 0;
+        static final int EXTEND_PER_VISIT = 1;
     }
 
 }

@@ -131,6 +131,10 @@ public class CacheUtils {
         ACache.get(BaseApplication.getJDApplication()).put(key, value, saveTime);
     }
 
+    public static void updateCache(){
+        ACache.get(BaseApplication.getJDApplication()).updateCache();
+    }
+
     /**
      * 读取 String数据
      *
