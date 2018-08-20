@@ -6,6 +6,7 @@ import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.File;
@@ -35,10 +36,18 @@ public class MainActivity extends AppCompatActivity {
                 }
             });
             button = findViewById(R.id.button2);
+            final TextView textView = findViewById(R.id.text_view);
             button.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
-                    CacheUtils.updateCache();
+                    StringBuilder builder = new StringBuilder();
+                    builder.append("123").append("->").append(CacheUtils.getString("123")).append("\n");
+                    builder.append("234").append("->").append(CacheUtils.getString("234")).append("\n");
+                    builder.append("345").append("->").append(CacheUtils.getString("345")).append("\n");
+                    builder.append("456").append("->").append(CacheUtils.getString("456")).append("\n");
+                    builder.append("567").append("->").append(CacheUtils.getString("567")).append("\n");
+                    builder.append("678").append("->").append(CacheUtils.getString("678")).append("\n");
+                    textView.setText(builder.toString());
                 }
             });
 
