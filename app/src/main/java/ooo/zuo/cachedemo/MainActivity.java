@@ -83,6 +83,7 @@ public class MainActivity extends AppCompatActivity {
                 toast(rootPath);
             }
         }else {
+            // 来自Master主干
             toast("没有外置存储器!");
             return false;
         }
