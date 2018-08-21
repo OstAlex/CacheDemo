@@ -236,32 +236,37 @@ public class ACache {
             // cache is too big
             Log.e(TAG, "put: cache size is too big");
         }
-        boolean ret = false;
+        boolean ret;
         File file = mCache.newFile(key);
-        FileOutputStream out = null;
-        try {
-            memoryCache.put(file.getName(), Utils.byteToByte(value));
-            out = new FileOutputStream(file);
-            out.write(value);
-            ret = true;
-        } catch (Exception e) {
-            e.printStackTrace();
-            ret = false;
-        } finally {
-            if (out != null) {
-                try {
-                    out.flush();
-                    out.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
+        synchronized (file.getName()) {
+            if (file.exists() && !mCache.removeCache(file)) {
+                return false;
+            }
+            FileOutputStream out = null;
+            try {
+                memoryCache.put(file.getName(), Utils.byteToByte(value));
+                out = new FileOutputStream(file);
+                out.write(value);
+                CacheModel cacheModel = new CacheModel(file.getName());
+                cacheModel.liveType = liveType;
+                cacheModel.liveTime = liveTime * 1000;
+                mCache.put(file, cacheModel);
+                ret = true;
+            } catch (Exception e) {
+                e.printStackTrace();
+                ret = false;
+            } finally {
+                if (out != null) {
+                    try {
+                        out.flush();
+                        out.close();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
                 }
             }
-            CacheModel cacheModel = new CacheModel(file.getName());
-            cacheModel.liveType = liveType;
-            cacheModel.liveTime = liveTime * 1000;
-            mCache.put(file, cacheModel);
+            return ret;
         }
-        return ret;
     }
 
     /**
@@ -271,6 +276,9 @@ public class ACache {
      * @return byte 数据
      */
     public byte[] getAsBinary(String key) {
+        if (key == null) {
+            return null;
+        }
         File file = mCache.get(key);
         return get(file);
     }
@@ -281,7 +289,7 @@ public class ACache {
             if (file == null) {
                 return null;
             }
-            if (!Utils.isLive(mCache.cacheMap.get(file.getName()))){
+            if (!Utils.isLive(mCache.cacheMap.get(file.getName()))) {
                 return null;
             }
             Byte[] bytes = memoryCache.get(file.getName());
@@ -531,7 +539,7 @@ public class ACache {
             }
             String name = file.getName();
             CacheModel model = cacheMap.get(name);
-            if (!Utils.isLive(model)){
+            if (!Utils.isLive(model)) {
                 removeCache(file);
             }
             insertOrUpdateDatabase(model);
@@ -621,7 +629,7 @@ public class ACache {
      */
     private static class Utils {
 
-        private static boolean isLive(CacheModel cacheModel){
+        private static boolean isLive(CacheModel cacheModel) {
             if (cacheModel != null) {
                 Long currentTime = System.currentTimeMillis();
                 if (cacheModel.liveType == LiveType.ONCE) {
