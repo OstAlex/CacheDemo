@@ -22,7 +22,7 @@ public class MainActivity extends AppCompatActivity {
             CacheUtils.putString("234","adgqrhwrhsfhar",43);
             CacheUtils.putString("345","htsqregadgrh",60);
             CacheUtils.putString("456","hrwewergsdg",30);
-            CacheUtils.putString("567","hwhrhwerafghrhr");
+            CacheUtils.putString("567","hwhrhwer交际盘丝洞😒😑😏🤠😑🙄🙄afghrhr");
             CacheUtils.putString("678","加油向未来！！！Come On ！");
             toast("缓存成功");
         }
