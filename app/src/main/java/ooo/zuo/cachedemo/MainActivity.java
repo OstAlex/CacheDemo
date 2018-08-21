@@ -10,12 +10,15 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.File;
+import java.util.Iterator;
+import java.util.Map;
 
 import ooo.zuo.cachedemo.cache.CacheUtils;
 
 public class MainActivity extends AppCompatActivity {
 
     long time ;
+    char[] chars = new char[]{'a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z'};
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -26,15 +29,30 @@ public class MainActivity extends AppCompatActivity {
                 @Override
                 public void onClick(View v) {
                     time = System.currentTimeMillis();
-                    CacheUtils.putString("123","gfshargfg",6);
-                    CacheUtils.putString("234","g三国杀好人好事a2342fdgdg",19);
-                    CacheUtils.putString("345","hts分公司发过火qregadgrh",24);
-                    CacheUtils.putString("456","发货sgsghs蛋糕师傅速度发货",13);
-                    CacheUtils.putString("567","hwhrhwera挨个fghrhr");
-                    CacheUtils.putString("678","sfghrafhr加油向未来！！！Come On ！");
-                    CacheUtils.putWithExtensibleTime("789","lalalalalalalala",5);
+                    for (int i = 0; i < 10; i++) {
+                        char[] c = new char[3];
+                        double random = Math.random();
+                        int position = (int) (26*random);
+                        c[0] = chars[position];
+                        position = (int) (Math.random()*26);
+                        c[1] = chars[position];
+                        c[2] = chars[(int)(Math.random()*26)];
+                        String key = new String(c);
+                        char[] values = new char[100];
+                        for (int j = 0; j < 100; j++) {
+                            values[j] = chars[(int)(Math.random()*26)];
+                        }
+                        String value = new String(values);
+                        if (value.contains("a")){
+                            CacheUtils.putString(key, value+"😝asd😝😜jafasdw😘👨‍👘👘哈哈💄💄💄哈😝µ∆˚∆˙©ƒ®ƒ");
+                        }else if (value.contains("b")){
+                            CacheUtils.putWithExtensibleTime(key+"😆😆😆", value,15);
+                        }else {
+                            CacheUtils.putString(key, value);
+                        }
+                    }
 
-                    toast("缓存成功");
+                    toast("缓存成功 "+(System.currentTimeMillis()-time));
                 }
             });
             button = findViewById(R.id.button2);
@@ -42,15 +60,17 @@ public class MainActivity extends AppCompatActivity {
             button.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
+                    time = System.currentTimeMillis();
+                    Map<String, String> cache = CacheUtils.getAllCacheAsString();
+                    time = System.currentTimeMillis()-time;
+                    Iterator<String> iterator = cache.keySet().iterator();
                     StringBuilder builder = new StringBuilder();
-                    builder.append("123").append("->").append(CacheUtils.getString("123")).append("\n");
-                    builder.append("234").append("->").append(CacheUtils.getString("234")).append("\n");
-                    builder.append("345").append("->").append(CacheUtils.getString("345")).append("\n");
-                    builder.append("456").append("->").append(CacheUtils.getString("456")).append("\n");
-                    builder.append("567").append("->").append(CacheUtils.getString("567")).append("\n");
-                    builder.append("678").append("->").append(CacheUtils.getString("678")).append("\n");
-                    builder.append("789").append("->").append(CacheUtils.getString("789")).append("\n");
-                    builder.append((System.currentTimeMillis()-time)/1000);
+                    while (iterator.hasNext()){
+                        String key = iterator.next();
+                        String value = cache.get(key);
+                        builder.append(key).append("->").append(value).append("\n");
+                    }
+                    builder.append("time:").append(time).append("\n\n");
                     textView.setText(builder.toString());
                 }
             });

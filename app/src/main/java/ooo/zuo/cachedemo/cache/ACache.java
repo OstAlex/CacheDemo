@@ -15,6 +15,7 @@
  */
 package ooo.zuo.cachedemo.cache;
 
+import android.app.ActivityManager;
 import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
@@ -26,31 +27,21 @@ import android.graphics.Canvas;
 import android.graphics.PixelFormat;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
+import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
+import android.support.v4.util.LruCache;
 import android.text.TextUtils;
 import android.util.Log;
 
-import org.json.JSONArray;
-import org.json.JSONObject;
-
 import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.FileReader;
-import java.io.FileWriter;
 import java.io.FilenameFilter;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.io.OutputStream;
 import java.io.RandomAccessFile;
-import java.io.Serializable;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -64,6 +55,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -81,6 +73,7 @@ public class ACache {
     private static int MAX_SIZE = 1000 * 1000 * 50; // 50 mb
     private static final int MAX_COUNT = Integer.MAX_VALUE; // 不限制存放数据的数量
     private static Map<String, ACache> mInstanceMap = new HashMap<String, ACache>();
+    private final MemoryCache memoryCache;
     private ACacheManager mCache;
     private static String mCachePath;
     private static String mCacheName = "cache";
@@ -146,6 +139,7 @@ public class ACache {
         if (!cacheDir.exists() && !cacheDir.mkdirs()) {
             throw new RuntimeException("can't make dirs in " + cacheDir.getAbsolutePath());
         }
+        memoryCache = new MemoryCache(10);
         mCache = new ACacheManager(context, cacheDir, max_size, max_count);
     }
 
@@ -235,10 +229,18 @@ public class ACache {
      * @param liveTime 保存的时间，单位：秒
      */
     private boolean put(String key, byte[] value, int liveTime, int liveType) {
+        if (key == null || value == null || liveType < -1 || liveType > 1) {
+            return false;
+        }
+        if (value.length > 1024 * 1024 * 4) { // >4MB
+            // cache is too big
+            Log.e(TAG, "put: cache size is too big");
+        }
         boolean ret = false;
         File file = mCache.newFile(key);
         FileOutputStream out = null;
         try {
+            memoryCache.put(file.getName(), Utils.byteToByte(value));
             out = new FileOutputStream(file);
             out.write(value);
             ret = true;
@@ -269,18 +271,27 @@ public class ACache {
      * @return byte 数据
      */
     public byte[] getAsBinary(String key) {
+        File file = mCache.get(key);
+        return get(file);
+    }
+
+    private byte[] get(File file) {
         RandomAccessFile RAFile = null;
-        boolean removeFile = false;
         try {
-            File file = mCache.get(key);
             if (file == null) {
                 return null;
+            }
+            Byte[] bytes = memoryCache.get(file.getName());
+            if (bytes != null) {
+                return Utils.ByteTobyte(bytes);
             }
             if (!file.exists())
                 return null;
             RAFile = new RandomAccessFile(file, "r");
             byte[] byteArray = new byte[(int) RAFile.length()];
             RAFile.read(byteArray);
+            RAFile.close();
+            memoryCache.put(file.getName(), Utils.byteToByte(byteArray));
             return byteArray;
         } catch (Exception e) {
             e.printStackTrace();
@@ -294,6 +305,25 @@ public class ACache {
                 }
             }
         }
+    }
+
+    public Map<String, String> getAllCache() {
+        Iterator<String> iterator = mCache.cacheMap.keySet().iterator();
+        Map<String, String> caches = new HashMap<>();
+        while (iterator.hasNext()) {
+            String key = iterator.next();
+            CacheModel cacheModel = mCache.cacheMap.get(key);
+            String name = cacheModel.name;
+            File cacheFile = new File(mCache.cacheDir, name);
+            byte[] bytes = get(cacheFile);
+            String value = null;
+            if (bytes != null) {
+                value = new String(bytes, Charset.forName("UTF-8"));
+            }
+            caches.put(key, value);
+
+        }
+        return caches;
     }
 
     /**
@@ -316,7 +346,7 @@ public class ACache {
      * @return 是否移除成功
      */
     public boolean remove(String key) {
-        return mCache.remove(key);
+        return mCache.removeCache(key);
     }
 
     /**
@@ -326,9 +356,6 @@ public class ACache {
         mCache.clear();
     }
 
-    public void updateCache() {
-        mCache.createOrUpdateDatabase();
-    }
 
     /**
      * @author 杨福海（michael） www.yangfuhai.com
@@ -345,17 +372,15 @@ public class ACache {
         protected File cacheDir;
         private CacheDatabaseHelper helper;
         private ConcurrentHashMap<String, CacheModel> cacheMap = new ConcurrentHashMap<>();
-        private Context context;
 
         private ACacheManager(Context context, File cacheDir, long sizeLimit, int countLimit) {
-            this.context = context.getApplicationContext();
             this.cacheDir = cacheDir;
             this.sizeLimit = sizeLimit;
             this.countLimit = countLimit;
             cacheSize = new AtomicLong();
             cacheCount = new AtomicInteger();
             executor = Executors.newSingleThreadExecutor();
-            helper = new CacheDatabaseHelper(context);
+            helper = new CacheDatabaseHelper(context.getApplicationContext());
             createOrUpdateDatabase();
         }
 
@@ -363,7 +388,13 @@ public class ACache {
         protected void finalize() throws Throwable {
             try {
                 if (helper != null) {
-                    helper.close();
+                    try {
+                        executor.awaitTermination(500, TimeUnit.MILLISECONDS);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    } finally {
+                        helper.close();
+                    }
                 }
             } finally {
                 super.finalize();
@@ -454,8 +485,6 @@ public class ACache {
             cacheModel.lastVisitTime = currentTime;
             cacheModel.name = file.getName();
             insertOrUpdateDatabase(cacheModel);
-
-            file.setLastModified(currentTime);
             lastUsageDates.put(file, currentTime);
             return true;
         }
@@ -494,6 +523,10 @@ public class ACache {
 
         private File get(String key) {
             File file = newFile(key);
+            if (!file.exists()) {
+                removeCache(file);
+                return null;
+            }
             String name = file.getName();
             CacheModel model = cacheMap.get(name);
             Long currentTime = System.currentTimeMillis();
@@ -501,25 +534,18 @@ public class ACache {
                 Log.d(TAG, "get: key:" + key + "->" + model);
                 if (model.liveType == LiveType.ONCE) {
                     if (model.createTime + model.liveTime < currentTime) {
-                        if (file.exists()) {
-                            file.delete();
-                        }
-                        deleteFromDatabase(name);
+                        removeCache(file);
                         return null;
                     }
                 } else if (model.liveType == LiveType.EXTEND_PER_VISIT) {
                     if (model.lastVisitTime + model.liveTime < currentTime) {
-                        if (file.exists()) {
-                            file.delete();
-                        }
-                        deleteFromDatabase(name);
+                        removeCache(file);
                         return null;
                     }
                 }
                 model.lastVisitTime = currentTime;
                 insertOrUpdateDatabase(model);
             }
-            file.setLastModified(currentTime);
             lastUsageDates.put(file, currentTime);
             return file;
         }
@@ -528,17 +554,26 @@ public class ACache {
             return new File(cacheDir, key.hashCode() + "");
         }
 
-        private boolean remove(String key) {
+        private boolean removeCache(String key) {
             File image = get(key);
-            if (image == null) {
-                return true;
+            return removeCache(image);
+        }
+
+        private boolean removeCache(File file) {
+            if (file != null) {
+                memoryCache.remove(file.getName());
+                lastUsageDates.remove(file);
+                deleteFromDatabase(file.getName());
+                if (file.exists()) {
+                    return file.delete();
+                }
             }
-            deleteFromDatabase(image.getName());
-            return image.delete();
+            return true;
         }
 
         private void clear() {
             lastUsageDates.clear();
+            memoryCache.evictAll();
             clearDatabase();
             cacheSize.set(0);
             File[] files = cacheDir.listFiles();
@@ -597,50 +632,33 @@ public class ACache {
      */
     private static class Utils {
 
-        /**
-         * 判断缓存的String数据是否到期
-         *
-         * @param str
-         * @return true：到期了 false：还没有到期
-         */
-        private static boolean isDue(String str) {
-            return isDue(str.getBytes());
-        }
-
-        /**
-         * 判断缓存的byte数据是否到期
-         *
-         * @param data
-         * @return true：到期了 false：还没有到期
-         */
-        private static boolean isDue(byte[] data) {
-            String[] strs = getDateInfoFromDate(data);
-            if (strs != null && strs.length == 2) {
-                String saveTimeStr = strs[0];
-                while (saveTimeStr.startsWith("0")) {
-                    saveTimeStr = saveTimeStr.substring(1, saveTimeStr.length());
-                }
-                long saveTime = Long.valueOf(saveTimeStr);
-                long deleteAfter = Long.valueOf(strs[1]);
-                if (System.currentTimeMillis() > saveTime + deleteAfter * 1000) {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        private static String clearDateInfo(String strInfo) {
-            if (strInfo != null && hasDateInfo(strInfo.getBytes())) {
-                strInfo = strInfo.substring(strInfo.indexOf(mSeparator) + 1, strInfo.length());
-            }
-            return strInfo;
-        }
-
         private static byte[] clearDateInfo(byte[] data) {
             if (hasDateInfo(data)) {
                 return copyOfRange(data, indexOf(data, mSeparator) + 1, data.length);
             }
             return data;
+        }
+
+        private static Byte[] byteToByte(byte[] b) {
+            if (b == null) {
+                return null;
+            }
+            Byte[] ret = new Byte[b.length];
+            for (int i = 0; i < ret.length; i++) {
+                ret[i] = b[i];
+            }
+            return ret;
+        }
+
+        private static byte[] ByteTobyte(Byte[] b) {
+            if (b == null) {
+                return null;
+            }
+            byte[] ret = new byte[b.length];
+            for (int i = 0; i < ret.length; i++) {
+                ret[i] = b[i];
+            }
+            return ret;
         }
 
         private static boolean hasDateInfo(byte[] data) {
@@ -1119,6 +1137,14 @@ public class ACache {
         public static final int FOREVER = -1;
         public static final int ONCE = 0;
         public static final int EXTEND_PER_VISIT = 1;
+    }
+
+    class MemoryCache extends LruCache<String, Byte[]> {
+
+        private MemoryCache(int size) {
+            super(size);
+        }
+
     }
 
 }

@@ -9,6 +9,7 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.Serializable;
+import java.util.Map;
 
 import ooo.zuo.cachedemo.BaseApplication;
 
@@ -52,9 +53,16 @@ public class CacheUtils {
      * @param value 保存的String数据
      */
     public static void putString(String key, String value) {
+        if (key==null||value==null){
+            return;
+        }
         long t = System.currentTimeMillis();
         ACache.get(BaseApplication.getJDApplication()).put(key, value);
         Log.d(TAG, "putString: time:"+(System.currentTimeMillis()-t));
+    }
+
+    public static Map<String, String> getAllCacheAsString(){
+        return ACache.get(BaseApplication.getJDApplication()).getAllCache();
     }
 
     /**
