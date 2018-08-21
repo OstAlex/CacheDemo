@@ -43,13 +43,7 @@ public class MainActivity extends AppCompatActivity {
                             values[j] = chars[(int)(Math.random()*26)];
                         }
                         String value = new String(values);
-                        if (value.contains("a")){
-                            CacheUtils.putString(key, value+"😝asd😝😜jafasdw😘👨‍👘👘哈哈💄💄💄哈😝µ∆˚∆˙©ƒ®ƒ");
-                        }else if (value.contains("b")){
-                            CacheUtils.putWithExtensibleTime(key+"😆😆😆", value,15);
-                        }else {
-                            CacheUtils.putString(key, value);
-                        }
+                        CacheUtils.putString(key,value,(int)(Math.random()*10+10));
                     }
 
                     toast("缓存成功 "+(System.currentTimeMillis()-time));

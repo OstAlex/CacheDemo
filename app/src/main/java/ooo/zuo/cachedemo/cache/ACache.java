@@ -139,7 +139,7 @@ public class ACache {
         if (!cacheDir.exists() && !cacheDir.mkdirs()) {
             throw new RuntimeException("can't make dirs in " + cacheDir.getAbsolutePath());
         }
-        memoryCache = new MemoryCache(10);
+        memoryCache = new MemoryCache(8);
         mCache = new ACacheManager(context, cacheDir, max_size, max_count);
     }
 
@@ -279,6 +279,9 @@ public class ACache {
         RandomAccessFile RAFile = null;
         try {
             if (file == null) {
+                return null;
+            }
+            if (!Utils.isLive(mCache.cacheMap.get(file.getName()))){
                 return null;
             }
             Byte[] bytes = memoryCache.get(file.getName());
@@ -422,7 +425,6 @@ public class ACache {
                     for (CacheModel cache : caches) {
                         cacheMap.put(cache.name, cache);
                     }
-                    Log.d(TAG, "run: 内存缓存准备完成....");
                 }
             };
             runnable.run();
@@ -529,24 +531,11 @@ public class ACache {
             }
             String name = file.getName();
             CacheModel model = cacheMap.get(name);
-            Long currentTime = System.currentTimeMillis();
-            if (model != null) {
-                Log.d(TAG, "get: key:" + key + "->" + model);
-                if (model.liveType == LiveType.ONCE) {
-                    if (model.createTime + model.liveTime < currentTime) {
-                        removeCache(file);
-                        return null;
-                    }
-                } else if (model.liveType == LiveType.EXTEND_PER_VISIT) {
-                    if (model.lastVisitTime + model.liveTime < currentTime) {
-                        removeCache(file);
-                        return null;
-                    }
-                }
-                model.lastVisitTime = currentTime;
-                insertOrUpdateDatabase(model);
+            if (!Utils.isLive(model)){
+                removeCache(file);
             }
-            lastUsageDates.put(file, currentTime);
+            insertOrUpdateDatabase(model);
+            lastUsageDates.put(file, System.currentTimeMillis());
             return file;
         }
 
@@ -555,7 +544,7 @@ public class ACache {
         }
 
         private boolean removeCache(String key) {
-            File image = get(key);
+            File image = newFile(key);
             return removeCache(image);
         }
 
@@ -631,6 +620,24 @@ public class ACache {
      * @title 时间计算工具类
      */
     private static class Utils {
+
+        private static boolean isLive(CacheModel cacheModel){
+            if (cacheModel != null) {
+                Long currentTime = System.currentTimeMillis();
+                if (cacheModel.liveType == LiveType.ONCE) {
+                    if (cacheModel.createTime + cacheModel.liveTime < currentTime) {
+                        return false;
+                    }
+                } else if (cacheModel.liveType == LiveType.EXTEND_PER_VISIT) {
+                    if (cacheModel.lastVisitTime + cacheModel.liveTime < currentTime) {
+                        return false;
+                    }
+                }
+                cacheModel.lastVisitTime = currentTime;
+                return true;
+            }
+            return false;
+        }
 
         private static byte[] clearDateInfo(byte[] data) {
             if (hasDateInfo(data)) {
