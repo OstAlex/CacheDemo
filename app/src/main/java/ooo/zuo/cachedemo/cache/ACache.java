@@ -146,9 +146,12 @@ public class ACache {
      * @param value 保存的String数据
      */
     public boolean put(String key, long startTime, String value) {
+        if (TextUtils.isEmpty(key) || TextUtils.isEmpty(value)) {
+            return false;
+        }
         try {
             return put(key, value.getBytes("UTF-8"), startTime, STRING);
-        } catch (UnsupportedEncodingException e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
         return false;
@@ -175,6 +178,9 @@ public class ACache {
      * @return true 缓存成功  false 缓存失败
      */
     public boolean put(String key, String value, long startTime, long liveTime) {
+        if (TextUtils.isEmpty(key) || TextUtils.isEmpty(value)) {
+            return false;
+        }
         try {
             return put(key, value.getBytes("UTF-8"), startTime, liveTime, STRING);
         } catch (Exception e) {
@@ -205,9 +211,12 @@ public class ACache {
      * @return true 缓存成功  false 缓存失败
      */
     public boolean putWithExtendTime(String key, String value, long startTime, long liveTime) {
+        if (TextUtils.isEmpty(key) || TextUtils.isEmpty(value)) {
+            return false;
+        }
         try {
             return putWithExtendTime(key, value.getBytes("UTF-8"), startTime, liveTime, STRING);
-        } catch (UnsupportedEncodingException e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
         return false;
@@ -221,6 +230,9 @@ public class ACache {
      */
     @Nullable
     public String getAsString(String key) {
+        if (TextUtils.isEmpty(key)) {
+            return null;
+        }
         byte[] bytes = getBytes(key, STRING);
         if (bytes == null) {
             return null;
@@ -238,6 +250,9 @@ public class ACache {
      * @return 将返回文件最后一个访问的时间. -1表示缓存不存在
      */
     public long getAsCacheTime(String key) {
+        if (TextUtils.isEmpty(key)) {
+            return -1;
+        }
         File file = file(key);
         File cacheInfoFile = mCache.cacheInfoFile(key);
         if (file != null && cacheInfoFile.exists()) {
@@ -381,6 +396,9 @@ public class ACache {
      * @return true 缓存成功 false 缓存失败
      */
     public boolean put(String key, byte[] value, long startTime, long liveTime, String type, int liveType) {
+        if (TextUtils.isEmpty(key) || value == null || value.length == 0 || TextUtils.isEmpty(type)) {
+            return false;
+        }
         File file = mCache.cacheFile(key);
         File infoFile = mCache.cacheInfoFile(key);
         if (Utils.createFile(file) && Utils.createFile(infoFile)) {
@@ -389,7 +407,7 @@ public class ACache {
                 Log.e(TAG, "put: write cache file failed");
                 return false;
             }
-            mCache.put(file);
+//            mCache.put(file);
 
             long currentTimeMillis = System.currentTimeMillis();
 
@@ -419,6 +437,9 @@ public class ACache {
      * @return byte 数据
      */
     private byte[] getBytes(String key, String dataType) {
+        if (TextUtils.isEmpty(key) || TextUtils.isEmpty(dataType)) {
+            return null;
+        }
         File cacheFile = mCache.cacheFile(key);
         File infoFile = mCache.cacheInfoFile(key);
         if (!cacheFile.exists()) {
@@ -431,18 +452,18 @@ public class ACache {
             if (cacheInfo == null) {
                 return null;
             } else if (!Utils.isAlive(cacheInfo)) {
-                if (Utils.outOfDate(cacheInfo)){
-                    Log.d(TAG, "getBytes: "+key+" is out of date !");
+                if (Utils.outOfDate(cacheInfo)) {
+                    Log.d(TAG, "getBytes: " + key + " is out of date !");
                     remove(key);
                 }
                 return null;
             } else if (!TextUtils.equals(dataType, cacheInfo.fileType)) {
-                Log.e(TAG, "getBytes: dateType is not matched!! request:"+dataType+" found:"+cacheInfo.fileType);
+                Log.e(TAG, "getBytes: dateType is not matched!! request:" + dataType + " found:" + cacheInfo.fileType);
                 return null;
             }
             long currentTimeMillis = System.currentTimeMillis();
             cacheInfo.lastVisitTime = currentTimeMillis;
-            if (cacheInfo.liveType==LiveType.REFRESH_TIME){
+            if (cacheInfo.liveType == LiveType.REFRESH_TIME) {
                 cacheInfo.expiryTime = currentTimeMillis + cacheInfo.liveTime;
             }
             mCache.writeCacheInfoFile(infoFile, cacheInfo);
@@ -470,6 +491,9 @@ public class ACache {
      * @param value 保存的bitmap数据
      */
     public boolean put(String key, Bitmap value) {
+        if (TextUtils.isEmpty(key) || value == null) {
+            return false;
+        }
         return put(key, Utils.Bitmap2Bytes(value), BITMAP);
     }
 
@@ -481,14 +505,23 @@ public class ACache {
      * @param liveTime 保存的时间，单位 ms
      */
     public boolean put(String key, Bitmap value, long liveTime) {
+        if (TextUtils.isEmpty(key) || value == null) {
+            return false;
+        }
         return put(key, Utils.Bitmap2Bytes(value), System.currentTimeMillis(), liveTime, BITMAP);
     }
 
     public boolean put(String key, long startTime, Bitmap value) {
+        if (TextUtils.isEmpty(key) || value == null) {
+            return false;
+        }
         return put(key, Utils.Bitmap2Bytes(value), startTime, BITMAP);
     }
 
     public boolean put(String key, Bitmap value, long startTime, long liveTime) {
+        if (TextUtils.isEmpty(key) || value == null) {
+            return false;
+        }
         return put(key, Utils.Bitmap2Bytes(value), startTime, liveTime, BITMAP);
     }
 
@@ -501,6 +534,9 @@ public class ACache {
      * @return true 缓存成功  false 缓存失败
      */
     public boolean putWithExtendTime(String key, Bitmap value, long liveTime) {
+        if (TextUtils.isEmpty(key) || value == null) {
+            return false;
+        }
         return putWithExtendTime(key, value, System.currentTimeMillis(), liveTime);
     }
 
@@ -514,6 +550,9 @@ public class ACache {
      * @return true 缓存成功  false 缓存失败
      */
     public boolean putWithExtendTime(String key, Bitmap value, long startTime, long liveTime) {
+        if (TextUtils.isEmpty(key) || value == null) {
+            return false;
+        }
         return put(key, Utils.Bitmap2Bytes(value), startTime, liveTime, BITMAP);
     }
 
@@ -573,6 +612,9 @@ public class ACache {
      */
     @Nullable
     public Drawable getAsDrawable(String key) {
+        if (TextUtils.isEmpty(key)) {
+            return null;
+        }
         Bitmap bitmap = getAsBitmap(key);
         if (bitmap == null) {
             return null;
@@ -588,6 +630,9 @@ public class ACache {
      */
     @Nullable
     public File file(String key) {
+        if (TextUtils.isEmpty(key)) {
+            return null;
+        }
         File f = mCache.cacheFile(key);
         if (f.exists())
             return f;
@@ -601,6 +646,9 @@ public class ACache {
      * @return 是否移除成功
      */
     public boolean remove(String key) {
+        if (TextUtils.isEmpty(key)) {
+            return true;
+        }
         return mCache.remove(key);
     }
 
@@ -683,15 +731,15 @@ public class ACache {
             lastUsageDates.put(file, currentTime);
         }
 
-
-        private File cacheFile(String key) {
+        @NonNull
+        private File cacheFile(@NonNull String key) {
             File file = new File(cacheDir, key.hashCode() + "");
             lastUsageDates.put(file, System.currentTimeMillis());
             return file;
         }
 
         @NonNull
-        private File cacheInfoFile(String key) {
+        private File cacheInfoFile(@NonNull String key) {
             return new File(cacheDir, key.hashCode() + ".info");
         }
 
@@ -741,7 +789,7 @@ public class ACache {
         }
 
         private boolean writeFile(File file, byte[] data) {
-            if (file == null || data == null) {
+            if (file == null || data == null || data.length == 0) {
                 return false;
             }
             try {
@@ -777,6 +825,9 @@ public class ACache {
 
 
         private boolean writeCacheInfoFile(File file, CacheInfo cacheInfo) {
+            if (file == null || cacheInfo == null) {
+                return false;
+            }
             try {
                 return writeFile(file, Utils.toJsonString(cacheInfo).getBytes("UTF-8"));
             } catch (Exception e) {
@@ -786,6 +837,9 @@ public class ACache {
         }
 
         private boolean remove(String key) {
+            if (TextUtils.isEmpty(key)) {
+                return true;
+            }
             File file = cacheFile(key);
             File infoFile = cacheInfoFile(key);
             if (infoFile.exists()) {
@@ -834,7 +888,7 @@ public class ACache {
             }
 
             long fileSize = calculateSize(mostLongUsedFile);
-            if (mostLongUsedFile.delete()) {
+            if (mostLongUsedFile != null && mostLongUsedFile.delete()) {
                 File infoFile = new File(mostLongUsedFile.getParentFile(), mostLongUsedFile.getName() + ".info");
                 if (infoFile.exists()) {
                     infoFile.delete();
@@ -844,7 +898,10 @@ public class ACache {
             return fileSize;
         }
 
-        private long calculateSize(File file) {
+        private long calculateSize(@Nullable File file) {
+            if (file == null) {
+                return 0;
+            }
             return file.length();
         }
     }
@@ -857,6 +914,9 @@ public class ACache {
     private static class Utils {
 
         private static boolean createFile(File file) {
+            if (file == null) {
+                return false;
+            }
             boolean ret = false;
             try {
                 ret = file.exists() || file.createNewFile();
@@ -866,7 +926,7 @@ public class ACache {
             return ret;
         }
 
-        private static boolean isAlive(CacheInfo cacheInfo) {
+        private static boolean isAlive(@Nullable CacheInfo cacheInfo) {
             if (cacheInfo == null) {
                 return false;
             }
@@ -881,7 +941,7 @@ public class ACache {
             return false;
         }
 
-        private static boolean outOfDate(CacheInfo cacheInfo) {
+        private static boolean outOfDate(@Nullable CacheInfo cacheInfo) {
             return cacheInfo == null || System.currentTimeMillis() > cacheInfo.expiryTime;
         }
 
@@ -907,7 +967,7 @@ public class ACache {
             return false;
         }
 
-
+        @Nullable
         private static byte[] clearDateInfo(byte[] data) {
             if (hasDateInfo(data)) {
                 return copyOfRange(data, indexOf(data, mSeparator) + 1, data.length);
@@ -919,6 +979,7 @@ public class ACache {
             return data != null && data.length > 15 && data[13] == '-' && indexOf(data, mSeparator) > 14;
         }
 
+        @Nullable
         private static String[] getDateInfoFromDate(byte[] data) {
             if (hasDateInfo(data)) {
                 String saveDate = new String(copyOfRange(data, 0, 13));
@@ -951,6 +1012,7 @@ public class ACache {
         /*
          * Bitmap → byte[]
          */
+        @Nullable
         private static byte[] Bitmap2Bytes(Bitmap bm) {
             if (bm == null) {
                 return null;
@@ -963,6 +1025,7 @@ public class ACache {
         /*
          * byte[] → Bitmap
          */
+        @Nullable
         private static Bitmap Bytes2Bimap(byte[] b) {
             if (b.length == 0) {
                 return null;
@@ -973,6 +1036,7 @@ public class ACache {
         /*
          * Drawable → Bitmap
          */
+        @Nullable
         private static Bitmap drawable2Bitmap(Drawable drawable) {
             if (drawable == null) {
                 return null;
@@ -996,6 +1060,7 @@ public class ACache {
          * Bitmap → Drawable
          */
         @SuppressWarnings("deprecation")
+        @Nullable
         private static Drawable bitmap2Drawable(Bitmap bm) {
             if (bm == null) {
                 return null;
@@ -1006,6 +1071,9 @@ public class ACache {
         }
 
         private static String toJsonString(CacheInfo cacheInfo) {
+            if (cacheInfo == null) {
+                return "";
+            }
             JSONObject json = new JSONObject();
             try {
                 json.put("fileType", cacheInfo.fileType);
@@ -1022,7 +1090,8 @@ public class ACache {
             return "";
         }
 
-        private static CacheInfo convertToCacheInfo(String s) {
+        @Nullable
+        private static CacheInfo convertToCacheInfo(@NonNull String s) {
             CacheInfo cacheInfo;
             try {
                 JSONObject json = new JSONObject(s);
