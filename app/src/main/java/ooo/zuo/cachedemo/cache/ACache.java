@@ -22,27 +22,20 @@ import android.graphics.Canvas;
 import android.graphics.PixelFormat;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
+import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
+import android.text.TextUtils;
 
-import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
-import java.io.FileReader;
-import java.io.FileWriter;
+import java.io.FilenameFilter;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.io.OutputStream;
-import java.io.RandomAccessFile;
-import java.io.Serializable;
+import java.io.UnsupportedEncodingException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -55,8 +48,8 @@ import java.util.concurrent.atomic.AtomicLong;
  * @author Michael Yang（www.yangfuhai.com） update at 2013.08.07
  */
 public class ACache {
-    public static final int TIME_HOUR = 60 * 60;
-    public static final int TIME_DAY = TIME_HOUR * 24;
+    public static final long TIME_HOUR = 60 * 60 * 1000;
+    public static final long TIME_DAY = TIME_HOUR * 24;
     private static int MAX_SIZE = 1000 * 1000 * 50; // 50 mb
     private static final int MAX_COUNT = Integer.MAX_VALUE; // 不限制存放数据的数量
     private static Map<String, ACache> mInstanceMap = new HashMap<String, ACache>();
@@ -64,8 +57,13 @@ public class ACache {
     private static String mCachePath;
     private static String mCacheName = "cache";
 
+    private static final String BYTE = "byte";
+    private static final String STRING = "string";
+    private static final String BITMAP = "bitmap";
+
     /**
      * 初始化
+     *
      * @param cachePath 缓存路径
      * @param cacheName 缓存文件夹名称
      */
@@ -76,9 +74,10 @@ public class ACache {
 
     /**
      * 初始化
+     *
      * @param cachePath 缓存路径
      * @param cacheName 缓存文件夹名称
-     * @param maxSize 最大缓存大小
+     * @param maxSize   最大缓存大小
      */
     public static void init(String cachePath, String cacheName, int maxSize) {
         mCachePath = cachePath;
@@ -124,219 +123,133 @@ public class ACache {
         mCache = new ACacheManager(cacheDir, max_size, max_count);
     }
 
-    /**
-     * Provides a means to save a cached file before the data are available.
-     * Since writing about the file is complete, and its close method is called,
-     * its contents will be registered in the cache. Example of use:
-     *
-     * ACache cache = new ACache(this) try { OutputStream stream =
-     * cache.put("myFileName") stream.write("some bytes".getBytes()); // now
-     * update cache! stream.close(); } catch(FileNotFoundException e){
-     * e.printStackTrace() }
-     */
-    class xFileOutputStream extends FileOutputStream {
-        File file;
-
-        public xFileOutputStream(File file) throws FileNotFoundException {
-            super(file);
-            this.file = file;
-        }
-
-        public void close() throws IOException {
-            super.close();
-            mCache.put(file);
-        }
-    }
-
     // =======================================
     // ============ String数据 读写 ==============
     // =======================================
 
     /**
-     * 保存 String数据 到 缓存中
+     * 保存 String数据 到 缓存中 立即生效，永久有效
      *
-     * @param key
-     *            保存的key
-     * @param value
-     *            保存的String数据
+     * @param key   保存的key
+     * @param value 保存的String数据
      */
-    public void put(String key, String value) {
-        File file = mCache.newFile(key);
-        BufferedWriter out = null;
-        try {
-            out = new BufferedWriter(new FileWriter(file), 1024);
-            out.write(value);
-        } catch (IOException e) {
-            e.printStackTrace();
-        } finally {
-            if (out != null) {
-                try {
-                    out.flush();
-                    out.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-            mCache.put(file);
-        }
+    public boolean put(String key, String value) {
+        return put(key, System.currentTimeMillis(), value);
     }
 
     /**
-     * 保存 String数据 到 缓存中
+     * 保存 String数据 到 缓存中 在startTime后生效，永久有效
      *
-     * @param key
-     *            保存的key
-     * @param value
-     *            保存的String数据
-     * @param saveTime
-     *            保存的时间，单位：秒
+     * @param key   保存的key
+     * @param value 保存的String数据
      */
-    public void put(String key, String value, int saveTime) {
-        put(key, Utils.newStringWithDateInfo(saveTime, value));
+    public boolean put(String key, long startTime, String value) {
+        try {
+            return put(key, value.getBytes("UTF-8"), startTime, STRING);
+        } catch (UnsupportedEncodingException e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
+
+    /**
+     * 保存 String数据 到 缓存中 立即生效,存活liveTime时间
+     *
+     * @param key      保存的key
+     * @param value    保存的String数据
+     * @param liveTime 保存的时间，单位 ms
+     */
+    public boolean put(String key, String value, long liveTime) {
+        return put(key, value, System.currentTimeMillis(), liveTime);
+    }
+
+    /**
+     * 保存 String数据 到缓存中 在开始时间后生效，存活liveTime时间。
+     *
+     * @param key       保存的Key
+     * @param value     保存的String数据
+     * @param startTime 缓存开始生效的时间 单位ms
+     * @param liveTime  缓存的生效时长 单位ms
+     * @return true 缓存成功  false 缓存失败
+     */
+    public boolean put(String key, String value, long startTime, long liveTime) {
+        try {
+            return put(key, value.getBytes("UTF-8"), startTime, liveTime, STRING);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
+
+    /**
+     * 保存 String数据 到缓存中， 立即生效，在生效期内每次访问延长存活时间
+     *
+     * @param key      保存的key
+     * @param value    保存的数据
+     * @param liveTime 存活时间/延长时间 单位 ms
+     * @return true 缓存成功  false 缓存失败
+     */
+    public boolean putWithExtendTime(String key, String value, long liveTime) {
+        return putWithExtendTime(key, value, System.currentTimeMillis(), liveTime);
+    }
+
+    /**
+     * 保存 String数据 到缓存中，在startTime开始生效，生效时间内每次访问将延长缓存的存活时间。
+     *
+     * @param key       保存的key
+     * @param value     保存的数据
+     * @param startTime 缓存开始生效的时间  单位ms
+     * @param liveTime  缓存存活时间/延长存活时间, 单位ms
+     * @return true 缓存成功  false 缓存失败
+     */
+    public boolean putWithExtendTime(String key, String value, long startTime, long liveTime) {
+        try {
+            return putWithExtendTime(key, value.getBytes("UTF-8"), startTime, liveTime, STRING);
+        } catch (UnsupportedEncodingException e) {
+            e.printStackTrace();
+        }
+        return false;
     }
 
     /**
      * 读取 String数据
      *
-     * @param key
-     * @return String 数据
+     * @param key 缓存的key
+     * @return String 数据,如果key所对应的数据不存在、非存活时期、数据类型不是String 将返回null
      */
+    @Nullable
     public String getAsString(String key) {
-        File file = mCache.get(key);
-        if (!file.exists())
+        byte[] bytes = getAsBinary(key, STRING);
+        if (bytes == null) {
             return null;
-        boolean removeFile = false;
-        BufferedReader in = null;
-        try {
-            in = new BufferedReader(new FileReader(file));
-            String readString = "";
-            String currentLine;
-            while ((currentLine = in.readLine()) != null) {
-                readString += currentLine;
-            }
-            if (!Utils.isDue(readString)) {
-                return Utils.clearDateInfo(readString);
-            } else {
-                removeFile = true;
-                return null;
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-            return null;
-        } finally {
-            if (in != null) {
-                try {
-                    in.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-            if (removeFile)
-                remove(key);
         }
+        try {
+            return new String(bytes, "UTF-8");
+        } catch (UnsupportedEncodingException e) {
+            e.printStackTrace();
+        }
+        return null;
     }
 
-    public long getAsCacheTime(String key){
-        File file =file(key);
-        if (file!=null && file.exists()){
-            return file.lastModified();
+    /**
+     * @param key
+     * @return 将返回文件最后一个访问的时间. -1表示缓存不存在
+     */
+    public long getAsCacheTime(String key) {
+        File file = file(key);
+        File cacheInfoFile = mCache.cacheInfoFile(key);
+        if (file != null && cacheInfoFile.exists()) {
+            CacheInfo cacheInfo = mCache.readCacheInfo(cacheInfoFile);
+            if (cacheInfo != null && Utils.isAlive(cacheInfo)) {
+                return cacheInfo.lastVisitTime;
+            }
+        } else if (file != null) {
+            long lastModified = file.lastModified();
+            return lastModified == 0 ? -1 : lastModified;
         }
         return -1;
     }
 
-    // =======================================
-    // ============= JSONObject 数据 读写 ==============
-    // =======================================
-
-    /**
-     * 保存 JSONObject数据 到 缓存中
-     *
-     * @param key
-     *            保存的key
-     * @param value
-     *            保存的JSON数据
-     */
-    public void put(String key, JSONObject value) {
-        put(key, value.toString());
-    }
-
-    /**
-     * 保存 JSONObject数据 到 缓存中
-     *
-     * @param key
-     *            保存的key
-     * @param value
-     *            保存的JSONObject数据
-     * @param saveTime
-     *            保存的时间，单位：秒
-     */
-    public void put(String key, JSONObject value, int saveTime) {
-        put(key, value.toString(), saveTime);
-    }
-
-    /**
-     * 读取JSONObject数据
-     *
-     * @param key
-     * @return JSONObject数据
-     */
-    public JSONObject getAsJSONObject(String key) {
-        String JSONString = getAsString(key);
-        try {
-            JSONObject obj = new JSONObject(JSONString);
-            return obj;
-        } catch (Exception e) {
-            e.printStackTrace();
-            return null;
-        }
-    }
-
-    // =======================================
-    // ============ JSONArray 数据 读写 =============
-    // =======================================
-
-    /**
-     * 保存 JSONArray数据 到 缓存中
-     *
-     * @param key
-     *            保存的key
-     * @param value
-     *            保存的JSONArray数据
-     */
-    public void put(String key, JSONArray value) {
-        put(key, value.toString());
-    }
-
-    /**
-     * 保存 JSONArray数据 到 缓存中
-     *
-     * @param key
-     *            保存的key
-     * @param value
-     *            保存的JSONArray数据
-     * @param saveTime
-     *            保存的时间，单位：秒
-     */
-    public void put(String key, JSONArray value, int saveTime) {
-        put(key, value.toString(), saveTime);
-    }
-
-    /**
-     * 读取JSONArray数据
-     *
-     * @param key
-     * @return JSONArray数据
-     */
-    public JSONArray getAsJSONArray(String key) {
-        String JSONString = getAsString(key);
-        try {
-            JSONArray obj = new JSONArray(JSONString);
-            return obj;
-        } catch (Exception e) {
-            e.printStackTrace();
-            return null;
-        }
-    }
 
     // =======================================
     // ============== byte 数据 读写 =============
@@ -345,72 +258,135 @@ public class ACache {
     /**
      * 保存 byte数据 到 缓存中
      *
-     * @param key
-     *            保存的key
-     * @param value
-     *            保存的数据
+     * @param key   保存的key
+     * @param value 保存的数据
      */
-    public void put(String key, byte[] value) {
-        File file = mCache.newFile(key);
-        FileOutputStream out = null;
-        try {
-            out = new FileOutputStream(file);
-            out.write(value);
-        } catch (Exception e) {
-            e.printStackTrace();
-        } finally {
-            if (out != null) {
-                try {
-                    out.flush();
-                    out.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-            mCache.put(file);
-        }
+    public boolean put(String key, byte[] value) {
+        return put(key, value, BYTE);
+    }
+
+
+    /**
+     * 保存 byte数据 到缓存中，立即生效，永久有效
+     *
+     * @param key      保存的key
+     * @param value    保存的数据
+     * @param dataType 数据类型
+     * @return true 缓存成功  false 缓存失败
+     */
+    public boolean put(String key, byte[] value, String dataType) {
+        return put(key, value, System.currentTimeMillis(), 0, dataType, LiveType.NORMAL);
     }
 
     /**
-     * Cache for a stream
+     * 保存 byte数据 到缓存中，可以设置缓存的生效时间
      *
-     * @param key
-     *            the file name.
-     * @return OutputStream stream for writing data.
-     * @throws FileNotFoundException
-     *             if the file can not be created.
+     * @param key       保存的key
+     * @param value     保存的数据
+     * @param startTime 缓存生效的时间 单位ms
+     * @param dataType  数据类型
+     * @return true 缓存成功  false 缓存失败
      */
-    public OutputStream put(String key) throws FileNotFoundException {
-        return new xFileOutputStream(mCache.newFile(key));
-    }
-
-    /**
-     *
-     * @param key
-     *            the file name.
-     * @return (InputStream or null) stream previously saved in cache.
-     * @throws FileNotFoundException
-     *             if the file can not be opened
-     */
-    public InputStream get(String key) throws FileNotFoundException {
-        File file = mCache.get(key);
-        if (!file.exists())
-            return null;
-        return new FileInputStream(file);
+    public boolean put(String key, byte[] value, long startTime, String dataType) {
+        return put(key, value, startTime, 0, dataType, LiveType.NORMAL);
     }
 
     /**
      * 保存 byte数据 到 缓存中
      *
-     * @param key
-     *            保存的key
-     * @param value
-     *            保存的数据
-     * @param saveTime
-     *            保存的时间，单位：秒
+     * @param key      保存的key
+     * @param value    保存的数据
+     * @param liveTime 保存的时间 单位ms
      */
-    public void put(String key, byte[] value, int saveTime) {
-        put(key, Utils.newByteArrayWithDateInfo(saveTime, value));
+    public boolean put(String key, byte[] value, String dataType, long liveTime) {
+        return put(key, value, System.currentTimeMillis(), liveTime, dataType, LiveType.ONCE);
+    }
+
+    /**
+     * 保存 byte 数据到 缓存中
+     *
+     * @param key       保存的Key
+     * @param value     保存的数据
+     * @param startTime 生效的开始时间 单位ms
+     * @param liveTime  生效时长 单位ms
+     * @param dataType  数据类型
+     * @return true 缓存成功 false 缓存失败
+     */
+    public boolean put(String key, byte[] value, long startTime, long liveTime, String dataType) {
+        return put(key, value, startTime, liveTime, dataType, LiveType.ONCE);
+    }
+
+
+    /**
+     * 保存 byte数据 到缓存中，默认生效时间为当前时间
+     *
+     * @param key      保存的key
+     * @param value    保存的数据
+     * @param liveTime 生效时长 单位ms
+     * @param dataType 数据类型
+     * @return true 缓存成功  false 缓存失败
+     */
+    public boolean putWithExtendTime(String key, byte[] value, long liveTime, String dataType) {
+        return put(key, value, System.currentTimeMillis(), liveTime, dataType, LiveType.REFRESH_TIME);
+    }
+
+    /**
+     * 保存 byte数据 到缓存中
+     *
+     * @param key       保存的key
+     * @param value     保存的数据
+     * @param startTime 缓存的生效时间
+     * @param liveTime  生效时长 单位ms
+     * @param dataType  数据类型
+     * @return true 缓存成功  false 缓存失败
+     */
+    public boolean putWithExtendTime(String key, byte[] value, long startTime, long liveTime, String dataType) {
+        return put(key, value, startTime, liveTime, dataType, LiveType.REFRESH_TIME);
+    }
+
+    /**
+     * 保存 byte数据 到缓存中
+     *
+     * @param key       保存的key
+     * @param value     保存的数据
+     * @param startTime 缓存生效时间
+     * @param liveTime  生效时长
+     * @param type      数据类型
+     * @param liveType  生效类型
+     *                  LiveType.NORMAL        :  普通缓存，没有失效时间。
+     *                  LiveType.ONCE          :  有失效时间。
+     *                  liveType.REFRESH_TIME  :  每次访问延长生效时间
+     * @return true 缓存成功 false 缓存失败
+     */
+    public boolean put(String key, byte[] value, long startTime, long liveTime, String type, int liveType) {
+        File file = mCache.cacheFile(key);
+        File infoFile = mCache.cacheInfoFile(key);
+        if (Utils.createFile(file) && Utils.createFile(infoFile)) {
+            boolean writeFile = mCache.writeFile(file, value);
+            if (!writeFile) {
+                return false;
+            }
+            mCache.put(file);
+
+            long currentTimeMillis = System.currentTimeMillis();
+
+            CacheInfo info = new CacheInfo();
+            info.fileType = type;
+            info.createTime = currentTimeMillis;
+            info.lastVisitTime = currentTimeMillis;
+            info.liveTime = liveTime;
+            info.liveType = liveType;
+            info.effectiveTime = startTime;
+            info.expiryTime = startTime + liveTime;
+            mCache.writeCacheInfoFile(infoFile, info);
+
+            return true;
+        }
+        return false;
+    }
+
+    public byte[] getAsBinary(String key) {
+        return getAsBinary(key, "byte");
     }
 
     /**
@@ -419,123 +395,37 @@ public class ACache {
      * @param key
      * @return byte 数据
      */
-    public byte[] getAsBinary(String key) {
-        RandomAccessFile RAFile = null;
-        boolean removeFile = false;
-        try {
-            File file = mCache.get(key);
-            if (!file.exists())
-                return null;
-            RAFile = new RandomAccessFile(file, "r");
-            byte[] byteArray = new byte[(int) RAFile.length()];
-            RAFile.read(byteArray);
-            if (!Utils.isDue(byteArray)) {
-                return Utils.clearDateInfo(byteArray);
-            } else {
-                removeFile = true;
-                return null;
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
+    private byte[] getAsBinary(String key, String dataType) {
+        File cacheFile = mCache.cacheFile(key);
+        File infoFile = mCache.cacheInfoFile(key);
+        if (!cacheFile.exists()) {
+            mCache.remove(key);
             return null;
-        } finally {
-            if (RAFile != null) {
-                try {
-                    RAFile.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-            if (removeFile)
-                remove(key);
         }
-    }
 
-    // =======================================
-    // ============= 序列化 数据 读写 ===============
-    // =======================================
-
-    /**
-     * 保存 Serializable数据 到 缓存中
-     *
-     * @param key
-     *            保存的key
-     * @param value
-     *            保存的value
-     */
-    public void put(String key, Serializable value) {
-        put(key, value, -1);
-    }
-
-    /**
-     * 保存 Serializable数据到 缓存中
-     *
-     * @param key
-     *            保存的key
-     * @param value
-     *            保存的value
-     * @param saveTime
-     *            保存的时间，单位：秒
-     */
-    public void put(String key, Serializable value, int saveTime) {
-        ByteArrayOutputStream baos = null;
-        ObjectOutputStream oos = null;
-        try {
-            baos = new ByteArrayOutputStream();
-            oos = new ObjectOutputStream(baos);
-            oos.writeObject(value);
-            byte[] data = baos.toByteArray();
-            if (saveTime != -1) {
-                put(key, data, saveTime);
-            } else {
-                put(key, data);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        } finally {
-            try {
-                oos.close();
-            } catch (IOException e) {
-            }
-        }
-    }
-
-    /**
-     * 读取 Serializable数据
-     *
-     * @param key
-     * @return Serializable 数据
-     */
-    public Object getAsObject(String key) {
-        byte[] data = getAsBinary(key);
-        if (data != null) {
-            ByteArrayInputStream bais = null;
-            ObjectInputStream ois = null;
-            try {
-                bais = new ByteArrayInputStream(data);
-                ois = new ObjectInputStream(bais);
-                Object reObject = ois.readObject();
-                return reObject;
-            } catch (Exception e) {
-                e.printStackTrace();
+        if (infoFile.exists()) {
+            CacheInfo cacheInfo = mCache.readCacheInfo(infoFile);
+            if (cacheInfo == null) {
                 return null;
-            } finally {
-                try {
-                    if (bais != null)
-                        bais.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-                try {
-                    if (ois != null)
-                        ois.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
+            } else if (!Utils.isAlive(cacheInfo)) {
+                remove(key);
+                return null;
+            } else if (!TextUtils.equals(dataType, cacheInfo.fileType)) {
+                return null;
             }
+            cacheInfo.lastVisitTime = System.currentTimeMillis();
+            mCache.writeCacheInfoFile(infoFile, cacheInfo);
         }
-        return null;
 
+        byte[] bytes = mCache.readFile(cacheFile);
+        if (Utils.hasDateInfo(bytes)) {
+            if (Utils.isDue(bytes)) {
+                remove(key);
+                return null;
+            }
+            bytes = Utils.clearDateInfo(bytes);
+        }
+        return bytes;
     }
 
     // =======================================
@@ -545,27 +435,53 @@ public class ACache {
     /**
      * 保存 bitmap 到 缓存中
      *
-     * @param key
-     *            保存的key
-     * @param value
-     *            保存的bitmap数据
+     * @param key   保存的key
+     * @param value 保存的bitmap数据
      */
-    public void put(String key, Bitmap value) {
-        put(key, Utils.Bitmap2Bytes(value));
+    public boolean put(String key, Bitmap value) {
+        return put(key, Utils.Bitmap2Bytes(value), BITMAP);
     }
 
     /**
      * 保存 bitmap 到 缓存中
      *
-     * @param key
-     *            保存的key
-     * @param value
-     *            保存的 bitmap 数据
-     * @param saveTime
-     *            保存的时间，单位：秒
+     * @param key      保存的key
+     * @param value    保存的 bitmap 数据
+     * @param liveTime 保存的时间，单位 ms
      */
-    public void put(String key, Bitmap value, int saveTime) {
-        put(key, Utils.Bitmap2Bytes(value), saveTime);
+    public boolean put(String key, Bitmap value, long liveTime) {
+        return put(key, Utils.Bitmap2Bytes(value), System.currentTimeMillis(), liveTime, BITMAP);
+    }
+
+    public boolean put(String key,long startTime,Bitmap value){
+        return put(key,Utils.Bitmap2Bytes(value),startTime,BITMAP);
+    }
+
+    public boolean put(String key,Bitmap value,long startTime,long liveTime){
+        return put(key,Utils.Bitmap2Bytes(value),startTime,liveTime,BITMAP);
+    }
+
+    /**
+     * 将 bitmap 保存到 缓存中，立即生效，在存活周期内每次访问将延长存活时间
+     * @param key      保存的key
+     * @param value    保存的bitmap
+     * @param liveTime 存活时间
+     * @return true 缓存成功  false 缓存失败
+     */
+    public boolean putWithExtendTime(String key,Bitmap value,long liveTime){
+        return put(key,value,System.currentTimeMillis(),liveTime);
+    }
+
+
+    /**
+     * 将 bitmap 保存到 缓存中，将在startTime后生效，在存活周期内，每次访问将延长存活时间
+     * @param key      保存的key
+     * @param value    保存的bitmap
+     * @param liveTime 存活时间
+     * @return true 缓存成功  false 缓存失败
+     */
+    public boolean putWithExtendTime(String key,Bitmap value,long startTime,long liveTime){
+        return put(key,Utils.Bitmap2Bytes(value),startTime,liveTime,BITMAP);
     }
 
     /**
@@ -575,10 +491,11 @@ public class ACache {
      * @return bitmap 数据
      */
     public Bitmap getAsBitmap(String key) {
-        if (getAsBinary(key) == null) {
+        byte[] bytes = getAsBinary(key, BITMAP);
+        if (bytes == null) {
             return null;
         }
-        return Utils.Bytes2Bimap(getAsBinary(key));
+        return Utils.Bytes2Bimap(bytes);
     }
 
     // =======================================
@@ -588,27 +505,31 @@ public class ACache {
     /**
      * 保存 drawable 到 缓存中
      *
-     * @param key
-     *            保存的key
-     * @param value
-     *            保存的drawable数据
+     * @param key   保存的key
+     * @param value 保存的drawable数据
      */
-    public void put(String key, Drawable value) {
-        put(key, Utils.drawable2Bitmap(value));
+    public boolean put(String key, Drawable value) {
+        return put(key, Utils.drawable2Bitmap(value));
     }
 
-    /**
-     * 保存 drawable 到 缓存中
-     *
-     * @param key
-     *            保存的key
-     * @param value
-     *            保存的 drawable 数据
-     * @param saveTime
-     *            保存的时间，单位：秒
-     */
-    public void put(String key, Drawable value, int saveTime) {
-        put(key, Utils.drawable2Bitmap(value), saveTime);
+    public boolean put(String key,long startTime,Drawable value){
+        return put(key,Utils.drawable2Bitmap(value),startTime);
+    }
+
+    public boolean put(String key,Drawable value,long liveTime){
+        return put(key,value,System.currentTimeMillis(),liveTime);
+    }
+
+    public boolean put(String key,Drawable value,long startTime,long liveTime){
+        return put(key,Utils.drawable2Bitmap(value),startTime,liveTime);
+    }
+
+    public boolean putWithExtendTime(String key,Drawable value,long liveTime){
+        return putWithExtendTime(key,value,System.currentTimeMillis(),liveTime);
+    }
+
+    public boolean putWithExtendTime(String key,Drawable value,long startTime,long liveTime){
+        return put(key,Utils.drawable2Bitmap(value),startTime,liveTime);
     }
 
     /**
@@ -617,11 +538,13 @@ public class ACache {
      * @param key
      * @return Drawable 数据
      */
+    @Nullable
     public Drawable getAsDrawable(String key) {
-        if (getAsBinary(key) == null) {
+        byte[] bytes = getAsBinary(key);
+        if (bytes == null) {
             return null;
         }
-        return Utils.bitmap2Drawable(Utils.Bytes2Bimap(getAsBinary(key)));
+        return Utils.bitmap2Drawable(Utils.Bytes2Bimap(bytes));
     }
 
     /**
@@ -630,8 +553,9 @@ public class ACache {
      * @param key
      * @return value 缓存的文件
      */
+    @Nullable
     public File file(String key) {
-        File f = mCache.newFile(key);
+        File f = mCache.cacheFile(key);
         if (f.exists())
             return f;
         return null;
@@ -655,9 +579,9 @@ public class ACache {
     }
 
     /**
-     * @title 缓存管理器
      * @author 杨福海（michael） www.yangfuhai.com
      * @version 1.0
+     * @title 缓存管理器
      */
     public class ACacheManager {
         private final AtomicLong cacheSize;
@@ -685,7 +609,12 @@ public class ACache {
                 public void run() {
                     int size = 0;
                     int count = 0;
-                    File[] cachedFiles = cacheDir.listFiles();
+                    File[] cachedFiles = cacheDir.listFiles(new FilenameFilter() {
+                        @Override
+                        public boolean accept(File dir, String name) {
+                            return !name.endsWith(".info");
+                        }
+                    });
                     if (cachedFiles != null) {
                         for (File cachedFile : cachedFiles) {
                             size += calculateSize(cachedFile);
@@ -718,26 +647,113 @@ public class ACache {
             cacheSize.addAndGet(valueSize);
 
             Long currentTime = System.currentTimeMillis();
-            file.setLastModified(currentTime);
             lastUsageDates.put(file, currentTime);
         }
 
-        private File get(String key) {
-            File file = newFile(key);
-            Long currentTime = System.currentTimeMillis();
-            file.setLastModified(currentTime);
-            lastUsageDates.put(file, currentTime);
 
+        private File cacheFile(String key) {
+            File file = new File(cacheDir, key.hashCode() + "");
+            lastUsageDates.put(file, System.currentTimeMillis());
             return file;
         }
 
-        private File newFile(String key) {
-            return new File(cacheDir, key.hashCode() + "");
+        @NonNull
+        private File cacheInfoFile(String key) {
+            return new File(cacheDir, key.hashCode() + ".info");
+        }
+
+        @Nullable
+        private CacheInfo readCacheInfo(File file) {
+            byte[] bytes = readFile(file);
+            if (bytes == null) {
+                return null;
+            }
+            try {
+                return Utils.convertToCacheInfo(new String(bytes, "UTF-8"));
+            } catch (UnsupportedEncodingException e) {
+                e.printStackTrace();
+            }
+            return null;
+        }
+
+        @Nullable
+        private byte[] readFile(File file) {
+            if (file == null || !file.exists()) {
+                return null;
+            }
+            FileInputStream inputStream = null;
+            try {
+                inputStream = new FileInputStream(file);
+                ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+                byte[] bytes = new byte[4096];
+                int read = inputStream.read(bytes);
+                while (read > -1) {
+                    byteArrayOutputStream.write(bytes, 0, read);
+                    read = inputStream.read(bytes);
+                }
+                inputStream.close();
+                return byteArrayOutputStream.toByteArray();
+            } catch (Exception e) {
+                e.printStackTrace();
+            } finally {
+                if (inputStream != null) {
+                    try {
+                        inputStream.close();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+            return null;
+        }
+
+        private boolean writeFile(File file, byte[] data) {
+            if (file == null || data == null) {
+                return false;
+            }
+            if (!file.exists()) {
+                FileOutputStream outputStream = null;
+                try {
+                    if (!file.createNewFile()) {
+                        return false;
+                    }
+                    outputStream = new FileOutputStream(file);
+                    outputStream.write(data);
+                    outputStream.close();
+                    return true;
+                } catch (IOException e) {
+                    e.printStackTrace();
+                } finally {
+                    if (outputStream != null) {
+                        try {
+                            outputStream.close();
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                }
+            }
+
+            return false;
+        }
+
+
+        private boolean writeCacheInfoFile(File file, CacheInfo cacheInfo) {
+            try {
+                return writeFile(file, Utils.toJsonString(cacheInfo).getBytes("UTF-8"));
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            return false;
         }
 
         private boolean remove(String key) {
-            File image = get(key);
-            return image.delete();
+            File file = cacheFile(key);
+            File infoFile = cacheInfoFile(key);
+            if (infoFile.exists()) {
+                infoFile.delete();
+            }
+            return !file.exists() || file.delete();
         }
 
         private void clear() {
@@ -781,6 +797,10 @@ public class ACache {
 
             long fileSize = calculateSize(mostLongUsedFile);
             if (mostLongUsedFile.delete()) {
+                File infoFile = new File(mostLongUsedFile.getParentFile(), mostLongUsedFile.getName() + ".info");
+                if (infoFile.exists()) {
+                    infoFile.delete();
+                }
                 lastUsageDates.remove(mostLongUsedFile);
             }
             return fileSize;
@@ -792,21 +812,37 @@ public class ACache {
     }
 
     /**
-     * @title 时间计算工具类
      * @author 杨福海（michael） www.yangfuhai.com
      * @version 1.0
+     * @title 时间计算工具类
      */
     private static class Utils {
 
-        /**
-         * 判断缓存的String数据是否到期
-         *
-         * @param str
-         * @return true：到期了 false：还没有到期
-         */
-        private static boolean isDue(String str) {
-            return isDue(str.getBytes());
+        private static boolean createFile(File file) {
+            boolean ret = false;
+            try {
+                ret = file.exists() || file.createNewFile();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            return ret;
         }
+
+        private static boolean isAlive(CacheInfo cacheInfo) {
+            if (cacheInfo == null) {
+                return false;
+            }
+            long currentTimeMillis = System.currentTimeMillis();
+            if (cacheInfo.liveType == LiveType.NORMAL) {
+                return cacheInfo.effectiveTime >= currentTimeMillis;
+            } else if (cacheInfo.liveType == LiveType.ONCE) {
+                return cacheInfo.effectiveTime >= currentTimeMillis && cacheInfo.liveTime + cacheInfo.createTime >= currentTimeMillis;
+            } else if (cacheInfo.liveType == LiveType.REFRESH_TIME) {
+                return cacheInfo.effectiveTime >= currentTimeMillis && cacheInfo.liveTime + cacheInfo.lastVisitTime >= currentTimeMillis;
+            }
+            return false;
+        }
+
 
         /**
          * 判断缓存的byte数据是否到期
@@ -830,24 +866,6 @@ public class ACache {
             return false;
         }
 
-        private static String newStringWithDateInfo(int second, String strInfo) {
-            return createDateInfo(second) + strInfo;
-        }
-
-        private static byte[] newByteArrayWithDateInfo(int second, byte[] data2) {
-            byte[] data1 = createDateInfo(second).getBytes();
-            byte[] retdata = new byte[data1.length + data2.length];
-            System.arraycopy(data1, 0, retdata, 0, data1.length);
-            System.arraycopy(data2, 0, retdata, data1.length, data2.length);
-            return retdata;
-        }
-
-        private static String clearDateInfo(String strInfo) {
-            if (strInfo != null && hasDateInfo(strInfo.getBytes())) {
-                strInfo = strInfo.substring(strInfo.indexOf(mSeparator) + 1, strInfo.length());
-            }
-            return strInfo;
-        }
 
         private static byte[] clearDateInfo(byte[] data) {
             if (hasDateInfo(data)) {
@@ -888,14 +906,6 @@ public class ACache {
         }
 
         private static final char mSeparator = ' ';
-
-        private static String createDateInfo(int second) {
-            String currentTime = System.currentTimeMillis() + "";
-            while (currentTime.length() < 13) {
-                currentTime = "0" + currentTime;
-            }
-            return currentTime + "-" + second + mSeparator;
-        }
 
         /*
          * Bitmap → byte[]
@@ -953,6 +963,58 @@ public class ACache {
             bd.setTargetDensity(bm.getDensity());
             return new BitmapDrawable(bm);
         }
+
+        private static String toJsonString(CacheInfo cacheInfo) {
+            JSONObject json = new JSONObject();
+            try {
+                json.put("fileType", cacheInfo.fileType);
+                json.put("createTime", cacheInfo.createTime);
+                json.put("liveType", cacheInfo.liveType);
+                json.put("liveTime", cacheInfo.liveTime);
+                json.put("lastVisitTime", cacheInfo.lastVisitTime);
+                json.put("effectiveTime", cacheInfo.effectiveTime);
+                json.put("expiryTime", cacheInfo.expiryTime);
+                return json.toString();
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
+            return "";
+        }
+
+        private static CacheInfo convertToCacheInfo(String s) {
+            CacheInfo cacheInfo;
+            try {
+                JSONObject json = new JSONObject(s);
+                cacheInfo = new CacheInfo();
+                cacheInfo.fileType = json.getString("fileType");
+                cacheInfo.createTime = json.getLong("createTime");
+                cacheInfo.liveType = json.getInt("liveType");
+                cacheInfo.liveTime = json.getLong("liveTime");
+                cacheInfo.lastVisitTime = json.getLong("lastVisitTime");
+                cacheInfo.effectiveTime = json.getLong("effectiveTime");
+                cacheInfo.expiryTime = json.getLong("expiryTime");
+            } catch (JSONException e) {
+                e.printStackTrace();
+                cacheInfo = null;
+            }
+            return cacheInfo;
+        }
+    }
+
+    static class CacheInfo {
+        String fileType;
+        long createTime;
+        long liveTime;
+        int liveType;
+        long lastVisitTime;
+        long effectiveTime;
+        long expiryTime;
+    }
+
+    static class LiveType {
+        public static final int NORMAL = -1;
+        public static final int ONCE = 0;
+        public static final int REFRESH_TIME = 1;
     }
 
 }
