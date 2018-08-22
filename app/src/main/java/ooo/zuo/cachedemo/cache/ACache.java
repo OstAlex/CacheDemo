@@ -1112,12 +1112,33 @@ public class ACache {
     }
 
     static class CacheInfo {
+        /**
+         * 文件数据类型
+         */
         String fileType;
+        /**
+         * 创建时间
+         */
         long createTime;
+        /**
+         * 生存时间
+         */
         long liveTime;
+        /**
+         * 生存类型 LiveType
+         */
         int liveType;
+        /**
+         * 最近一次访问时间
+         */
         long lastVisitTime;
+        /**
+         * 缓存生效时间
+         */
         long effectiveTime;
+        /**
+         * 缓存失效时间
+         */
         long expiryTime;
 
         @Override
@@ -1135,8 +1156,17 @@ public class ACache {
     }
 
     static class LiveType {
+        /**
+         * 普通缓存，没有失效时间
+         */
         public static final int NORMAL = -1;
+        /**
+         * 有失效时间的缓存
+         */
         public static final int ONCE = 0;
+        /**
+         * 每次访问将延长生存时间的缓存
+         */
         public static final int REFRESH_TIME = 1;
     }
 
