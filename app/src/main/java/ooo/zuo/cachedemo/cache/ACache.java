@@ -432,7 +432,7 @@ public class ACache {
                 return null;
             } else if (!Utils.isAlive(cacheInfo)) {
                 if (Utils.outOfDate(cacheInfo)){
-                    Log.d(TAG, "getAsBinary: "+key+" is out of date !");
+                    Log.d(TAG, "getBytes: "+key+" is out of date !");
                     remove(key);
                 }
                 return null;
@@ -573,11 +573,11 @@ public class ACache {
      */
     @Nullable
     public Drawable getAsDrawable(String key) {
-        byte[] bytes = getAsBinary(key);
-        if (bytes == null) {
+        Bitmap bitmap = getAsBitmap(key);
+        if (bitmap == null) {
             return null;
         }
-        return Utils.bitmap2Drawable(Utils.Bytes2Bimap(bytes));
+        return Utils.bitmap2Drawable(bitmap);
     }
 
     /**
