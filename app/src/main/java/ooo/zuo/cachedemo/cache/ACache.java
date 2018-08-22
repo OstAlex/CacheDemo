@@ -25,6 +25,7 @@ import android.graphics.drawable.Drawable;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.text.TextUtils;
+import android.util.Log;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -48,6 +49,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * @author Michael Yang（www.yangfuhai.com） update at 2013.08.07
  */
 public class ACache {
+    private static final String TAG = "ACache";
     public static final long TIME_HOUR = 60 * 60 * 1000;
     public static final long TIME_DAY = TIME_HOUR * 24;
     private static int MAX_SIZE = 1000 * 1000 * 50; // 50 mb
@@ -219,7 +221,7 @@ public class ACache {
      */
     @Nullable
     public String getAsString(String key) {
-        byte[] bytes = getAsBinary(key, STRING);
+        byte[] bytes = getBytes(key, STRING);
         if (bytes == null) {
             return null;
         }
@@ -262,9 +264,29 @@ public class ACache {
      * @param value 保存的数据
      */
     public boolean put(String key, byte[] value) {
-        return put(key, value, BYTE);
+        return put(key, System.currentTimeMillis(), value);
     }
 
+    public boolean put(String key, long startTime, byte[] value) {
+        return put(key, value, startTime, BYTE);
+    }
+
+    public boolean put(String key, byte[] value, long liveTime) {
+        return put(key, value, System.currentTimeMillis(), liveTime);
+    }
+
+    public boolean put(String key, byte[] value, long startTime, long liveTime) {
+        return put(key, value, startTime, liveTime, BYTE);
+    }
+
+
+    public boolean putWithExtendTime(String key, byte[] value, long liveTime) {
+        return putWithExtendTime(key, value, System.currentTimeMillis(), liveTime);
+    }
+
+    public boolean putWithExtendTime(String key, byte[] value, long startTime, long liveTime) {
+        return putWithExtendTime(key, value, startTime, liveTime, BYTE);
+    }
 
     /**
      * 保存 byte数据 到缓存中，立即生效，永久有效
@@ -274,7 +296,7 @@ public class ACache {
      * @param dataType 数据类型
      * @return true 缓存成功  false 缓存失败
      */
-    public boolean put(String key, byte[] value, String dataType) {
+    private boolean put(String key, byte[] value, String dataType) {
         return put(key, value, System.currentTimeMillis(), 0, dataType, LiveType.NORMAL);
     }
 
@@ -287,7 +309,7 @@ public class ACache {
      * @param dataType  数据类型
      * @return true 缓存成功  false 缓存失败
      */
-    public boolean put(String key, byte[] value, long startTime, String dataType) {
+    private boolean put(String key, byte[] value, long startTime, String dataType) {
         return put(key, value, startTime, 0, dataType, LiveType.NORMAL);
     }
 
@@ -298,7 +320,7 @@ public class ACache {
      * @param value    保存的数据
      * @param liveTime 保存的时间 单位ms
      */
-    public boolean put(String key, byte[] value, String dataType, long liveTime) {
+    private boolean put(String key, byte[] value, String dataType, long liveTime) {
         return put(key, value, System.currentTimeMillis(), liveTime, dataType, LiveType.ONCE);
     }
 
@@ -364,6 +386,7 @@ public class ACache {
         if (Utils.createFile(file) && Utils.createFile(infoFile)) {
             boolean writeFile = mCache.writeFile(file, value);
             if (!writeFile) {
+                Log.e(TAG, "put: write cache file failed");
                 return false;
             }
             mCache.put(file);
@@ -386,7 +409,7 @@ public class ACache {
     }
 
     public byte[] getAsBinary(String key) {
-        return getAsBinary(key, "byte");
+        return getBytes(key, "byte");
     }
 
     /**
@@ -395,7 +418,7 @@ public class ACache {
      * @param key
      * @return byte 数据
      */
-    private byte[] getAsBinary(String key, String dataType) {
+    private byte[] getBytes(String key, String dataType) {
         File cacheFile = mCache.cacheFile(key);
         File infoFile = mCache.cacheInfoFile(key);
         if (!cacheFile.exists()) {
@@ -408,17 +431,25 @@ public class ACache {
             if (cacheInfo == null) {
                 return null;
             } else if (!Utils.isAlive(cacheInfo)) {
-                remove(key);
+                if (Utils.outOfDate(cacheInfo)){
+                    Log.d(TAG, "getAsBinary: "+key+" is out of date !");
+                    remove(key);
+                }
                 return null;
             } else if (!TextUtils.equals(dataType, cacheInfo.fileType)) {
+                Log.e(TAG, "getBytes: dateType is not matched!! request:"+dataType+" found:"+cacheInfo.fileType);
                 return null;
             }
-            cacheInfo.lastVisitTime = System.currentTimeMillis();
+            long currentTimeMillis = System.currentTimeMillis();
+            cacheInfo.lastVisitTime = currentTimeMillis;
+            if (cacheInfo.liveType==LiveType.REFRESH_TIME){
+                cacheInfo.expiryTime = currentTimeMillis + cacheInfo.liveTime;
+            }
             mCache.writeCacheInfoFile(infoFile, cacheInfo);
         }
 
         byte[] bytes = mCache.readFile(cacheFile);
-        if (Utils.hasDateInfo(bytes)) {
+        if (Utils.hasDateInfo(bytes)) { //是否是老数据
             if (Utils.isDue(bytes)) {
                 remove(key);
                 return null;
@@ -453,35 +484,37 @@ public class ACache {
         return put(key, Utils.Bitmap2Bytes(value), System.currentTimeMillis(), liveTime, BITMAP);
     }
 
-    public boolean put(String key,long startTime,Bitmap value){
-        return put(key,Utils.Bitmap2Bytes(value),startTime,BITMAP);
+    public boolean put(String key, long startTime, Bitmap value) {
+        return put(key, Utils.Bitmap2Bytes(value), startTime, BITMAP);
     }
 
-    public boolean put(String key,Bitmap value,long startTime,long liveTime){
-        return put(key,Utils.Bitmap2Bytes(value),startTime,liveTime,BITMAP);
+    public boolean put(String key, Bitmap value, long startTime, long liveTime) {
+        return put(key, Utils.Bitmap2Bytes(value), startTime, liveTime, BITMAP);
     }
 
     /**
      * 将 bitmap 保存到 缓存中，立即生效，在存活周期内每次访问将延长存活时间
+     *
      * @param key      保存的key
      * @param value    保存的bitmap
      * @param liveTime 存活时间
      * @return true 缓存成功  false 缓存失败
      */
-    public boolean putWithExtendTime(String key,Bitmap value,long liveTime){
-        return put(key,value,System.currentTimeMillis(),liveTime);
+    public boolean putWithExtendTime(String key, Bitmap value, long liveTime) {
+        return putWithExtendTime(key, value, System.currentTimeMillis(), liveTime);
     }
 
 
     /**
      * 将 bitmap 保存到 缓存中，将在startTime后生效，在存活周期内，每次访问将延长存活时间
+     *
      * @param key      保存的key
      * @param value    保存的bitmap
      * @param liveTime 存活时间
      * @return true 缓存成功  false 缓存失败
      */
-    public boolean putWithExtendTime(String key,Bitmap value,long startTime,long liveTime){
-        return put(key,Utils.Bitmap2Bytes(value),startTime,liveTime,BITMAP);
+    public boolean putWithExtendTime(String key, Bitmap value, long startTime, long liveTime) {
+        return put(key, Utils.Bitmap2Bytes(value), startTime, liveTime, BITMAP);
     }
 
     /**
@@ -491,7 +524,7 @@ public class ACache {
      * @return bitmap 数据
      */
     public Bitmap getAsBitmap(String key) {
-        byte[] bytes = getAsBinary(key, BITMAP);
+        byte[] bytes = getBytes(key, BITMAP);
         if (bytes == null) {
             return null;
         }
@@ -512,24 +545,24 @@ public class ACache {
         return put(key, Utils.drawable2Bitmap(value));
     }
 
-    public boolean put(String key,long startTime,Drawable value){
-        return put(key,Utils.drawable2Bitmap(value),startTime);
+    public boolean put(String key, long startTime, Drawable value) {
+        return put(key, Utils.drawable2Bitmap(value), startTime);
     }
 
-    public boolean put(String key,Drawable value,long liveTime){
-        return put(key,value,System.currentTimeMillis(),liveTime);
+    public boolean put(String key, Drawable value, long liveTime) {
+        return put(key, value, System.currentTimeMillis(), liveTime);
     }
 
-    public boolean put(String key,Drawable value,long startTime,long liveTime){
-        return put(key,Utils.drawable2Bitmap(value),startTime,liveTime);
+    public boolean put(String key, Drawable value, long startTime, long liveTime) {
+        return put(key, Utils.drawable2Bitmap(value), startTime, liveTime);
     }
 
-    public boolean putWithExtendTime(String key,Drawable value,long liveTime){
-        return putWithExtendTime(key,value,System.currentTimeMillis(),liveTime);
+    public boolean putWithExtendTime(String key, Drawable value, long liveTime) {
+        return putWithExtendTime(key, value, System.currentTimeMillis(), liveTime);
     }
 
-    public boolean putWithExtendTime(String key,Drawable value,long startTime,long liveTime){
-        return put(key,Utils.drawable2Bitmap(value),startTime,liveTime);
+    public boolean putWithExtendTime(String key, Drawable value, long startTime, long liveTime) {
+        return put(key, Utils.drawable2Bitmap(value), startTime, liveTime);
     }
 
     /**
@@ -711,25 +744,30 @@ public class ACache {
             if (file == null || data == null) {
                 return false;
             }
-            if (!file.exists()) {
-                FileOutputStream outputStream = null;
-                try {
-                    if (!file.createNewFile()) {
-                        return false;
-                    }
-                    outputStream = new FileOutputStream(file);
-                    outputStream.write(data);
-                    outputStream.close();
-                    return true;
-                } catch (IOException e) {
-                    e.printStackTrace();
-                } finally {
-                    if (outputStream != null) {
-                        try {
-                            outputStream.close();
-                        } catch (IOException e) {
-                            e.printStackTrace();
-                        }
+            try {
+                if (!file.exists() && !file.createNewFile()) {
+                    return false;
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+                return false;
+            }
+
+            FileOutputStream outputStream = null;
+            try {
+                outputStream = new FileOutputStream(file);
+                outputStream.write(data);
+                outputStream.flush();
+                outputStream.close();
+                return true;
+            } catch (IOException e) {
+                e.printStackTrace();
+            } finally {
+                if (outputStream != null) {
+                    try {
+                        outputStream.close();
+                    } catch (IOException e) {
+                        e.printStackTrace();
                     }
                 }
             }
@@ -834,15 +872,18 @@ public class ACache {
             }
             long currentTimeMillis = System.currentTimeMillis();
             if (cacheInfo.liveType == LiveType.NORMAL) {
-                return cacheInfo.effectiveTime >= currentTimeMillis;
+                return cacheInfo.effectiveTime <= currentTimeMillis;
             } else if (cacheInfo.liveType == LiveType.ONCE) {
-                return cacheInfo.effectiveTime >= currentTimeMillis && cacheInfo.liveTime + cacheInfo.createTime >= currentTimeMillis;
+                return cacheInfo.effectiveTime <= currentTimeMillis && cacheInfo.expiryTime >= currentTimeMillis;
             } else if (cacheInfo.liveType == LiveType.REFRESH_TIME) {
-                return cacheInfo.effectiveTime >= currentTimeMillis && cacheInfo.liveTime + cacheInfo.lastVisitTime >= currentTimeMillis;
+                return cacheInfo.effectiveTime <= currentTimeMillis && cacheInfo.expiryTime >= currentTimeMillis;
             }
             return false;
         }
 
+        private static boolean outOfDate(CacheInfo cacheInfo) {
+            return cacheInfo == null || System.currentTimeMillis() > cacheInfo.expiryTime;
+        }
 
         /**
          * 判断缓存的byte数据是否到期
@@ -1009,6 +1050,19 @@ public class ACache {
         long lastVisitTime;
         long effectiveTime;
         long expiryTime;
+
+        @Override
+        public String toString() {
+            return "{" +
+                    "fileType='" + fileType + '\'' +
+                    ", createTime=" + createTime +
+                    ", liveTime=" + liveTime +
+                    ", liveType=" + liveType +
+                    ", lastVisitTime=" + lastVisitTime +
+                    ", effectiveTime=" + effectiveTime +
+                    ", expiryTime=" + expiryTime +
+                    '}';
+        }
     }
 
     static class LiveType {

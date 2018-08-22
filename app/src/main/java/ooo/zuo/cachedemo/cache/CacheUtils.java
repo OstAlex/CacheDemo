@@ -2,12 +2,14 @@ package ooo.zuo.cachedemo.cache;
 
 import android.graphics.Bitmap;
 import android.graphics.drawable.Drawable;
+import android.support.annotation.Nullable;
 
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.Serializable;
+import java.util.Map;
 
 import ooo.zuo.cachedemo.BaseApplication;
 
@@ -43,78 +45,23 @@ public class CacheUtils {
     }
 
     /**
-     * 保存 JSONObject数据 到 缓存中
-     *
-     * @param key   保存的key
-     * @param value 保存的JSONObject数据
-     */
-    public static void putJSONObject(String key, JSONObject value) {
-        ACache.get(BaseApplication.getJDApplication()).put(key, value);
-    }
-
-    /**
-     * 保存 JSONObject数据 到 缓存中
-     *
-     * @param key      保存的key
-     * @param value    保存的JSONObject数据
-     * @param saveTime 保存的时间，单位：秒
-     */
-    public static void putJSONObject(String key, JSONObject value, int saveTime) {
-        ACache.get(BaseApplication.getJDApplication()).put(key, value, saveTime);
-    }
-
-    /**
-     * 读取JSONObject数据
-     *
-     * @param key
-     * @return JSONObject数据
-     */
-    public static JSONObject getJSONObject(String key) {
-        return ACache.get(BaseApplication.getJDApplication()).getAsJSONObject(key);
-    }
-
-    /**
-     * 保存 JSONArray 到 缓存中
-     *
-     * @param key   保存的key
-     * @param value 保存的JSONArray数据
-     */
-    public static void putJSONArray(String key, JSONArray value) {
-        ACache.get(BaseApplication.getJDApplication()).put(key, value);
-    }
-
-    /**
-     * 保存 JSONArray 到 缓存中
-     *
-     * @param key      保存的key
-     * @param value    保存的JSONArray数据
-     * @param saveTime 保存的时间，单位：秒
-     */
-    public static void putJSONArray(String key, JSONArray value, int saveTime) {
-        ACache.get(BaseApplication.getJDApplication()).put(key, value, saveTime);
-    }
-
-    /**
-     * 读取JSONArray数据
-     *
-     * @param key
-     * @return JSONArray数据
-     */
-    public static JSONArray getJSONArray(String key) {
-        return ACache.get(BaseApplication.getJDApplication()).getAsJSONArray(key);
-    }
-
-    /**
      * 保存 String数据 到 缓存中
      *
      * @param key   保存的key
      * @param value 保存的String数据
      */
-    public static void putString(String key, String value) {
-        if (key == null || value == null) {
-            return;
+    public static boolean putString(String key, String value) {
+        if (key==null||value==null){
+            return false;
         }
-        ACache.get(BaseApplication.getJDApplication()).put(key, value);
+        return ACache.get(BaseApplication.getJDApplication()).put(key,value);
+    }
+
+    public static boolean putString(String key,String value,long startTime){
+        if (key == null || value == null) {
+            return false;
+        }
+        return ACache.get(BaseApplication.getJDApplication()).put(key,startTime,value);
     }
 
     /**
@@ -122,13 +69,27 @@ public class CacheUtils {
      *
      * @param key      保存的key
      * @param value    保存的String数据
-     * @param saveTime 保存的时间，单位：秒
+     * @param liveTime 保存的时间，单位：秒
      */
-    public static void putString(String key, String value, int saveTime) {
-        if (key == null || value == null) {
-            return;
+    public static boolean putString(String key, String value, int liveTime) {
+        return putString(key,value,System.currentTimeMillis(),liveTime);
+    }
+
+    public static boolean putString(String key,String value,long startTime,int liveTime){
+        if (key==null||value==null){
+            return false;
         }
-        ACache.get(BaseApplication.getJDApplication()).put(key, value, saveTime);
+        return ACache.get(BaseApplication.getJDApplication()).put(key,value,startTime,liveTime*1000);
+    }
+
+    public static boolean putStringWithExtendTime(String key,String value,int liveTime){
+        return putStringWithExtendTime(key, value,System.currentTimeMillis(), liveTime);
+    }
+    public static boolean putStringWithExtendTime(String key,String value,long startTime,int liveTime){
+        if (key==null||value==null){
+            return false;
+        }
+        return ACache.get(BaseApplication.getJDApplication()).putWithExtendTime(key,value,startTime,liveTime*1000);
     }
 
     /**
@@ -137,6 +98,7 @@ public class CacheUtils {
      * @param key
      * @return 读取String数据
      */
+    @Nullable
     public static String getString(String key) {
         return ACache.get(BaseApplication.getJDApplication()).getAsString(key);
     }
@@ -153,61 +115,59 @@ public class CacheUtils {
 
 
     /**
-     * 保存 Serializable数据 到 缓存中
-     *
-     * @param key   保存的key
-     * @param value 保存的Serializable数据
-     */
-    public static void putObject(String key, Serializable value) {
-        ACache.get(BaseApplication.getJDApplication()).put(key, value);
-    }
-
-    /**
-     * 保存 Serializable数据 到 缓存中
-     *
-     * @param key      保存的key
-     * @param value    保存的Serializable数据
-     * @param saveTime 保存的时间，单位：秒
-     */
-    public static void putObject(String key, Serializable value, int saveTime) {
-        ACache.get(BaseApplication.getJDApplication()).put(key, value, saveTime);
-    }
-
-    /**
-     * 读取 Serializable数据
-     *
-     * @param key 保存的key
-     * @return Serializable数据
-     */
-    public static Object getObject(String key) {
-        return ACache.get(BaseApplication.getJDApplication()).getAsObject(key);
-    }
-
-    /**
      * 保存 byte数据 到 缓存中
      *
      * @param key   保存的key
      * @param value 保存的byte数据
      */
-    public static void putByte(String key, byte[] value) {
+    public static boolean putByte(String key, byte[] value) {
         if (key == null || value == null) {
-            return;
+            return false;
         }
-        ACache.get(BaseApplication.getJDApplication()).put(key, value);
+        return ACache.get(BaseApplication.getJDApplication()).put(key, value);
     }
 
+    public static boolean putByte(String key, byte[] value,long startTime) {
+        if (key == null || value == null) {
+            return false;
+        }
+        return ACache.get(BaseApplication.getJDApplication()).put(key, startTime,value);
+    }
     /**
      * 保存 byte数据 到 缓存中
      *
      * @param key      保存的key
      * @param value    保存的byte数据
-     * @param saveTime 保存的时间，单位：秒
+     * @param liveTime 保存的时间，单位：秒
      */
-    public static void putByte(String key, byte[] value, int saveTime) {
+    public static boolean putByte(String key, byte[] value, int liveTime) {
         if (key == null || value == null) {
-            return;
+            return false;
         }
-        ACache.get(BaseApplication.getJDApplication()).put(key, value, saveTime);
+        return ACache.get(BaseApplication.getJDApplication()).put(key, value, liveTime * 1000);
+    }
+
+    /**
+     * 保存byte数据到缓存，存活期间每次访问将延长存活时间
+     * @param liveTime  存活时间/延长时间
+     */
+    public static boolean putByteWithExtendTime(String key,byte[] value,int liveTime){
+        if (key == null || value == null) {
+            return false;
+        }
+        return ACache.get(BaseApplication.getJDApplication()).putWithExtendTime(key, value, liveTime * 1000);
+    }
+
+    /**
+     * 保存byte数据到缓存，存活期间每次访问将延长存活时间
+     * @param startTime 开始生效期间
+     * @param liveTime 存活时间/延长时间
+     */
+    public static boolean putByteWithExtendTime(String key,byte[] value,long startTime,int liveTime){
+        if (key == null || value == null) {
+            return false;
+        }
+        return ACache.get(BaseApplication.getJDApplication()).putWithExtendTime(key, value, startTime,liveTime * 1000);
     }
 
     /**
@@ -216,6 +176,7 @@ public class CacheUtils {
      * @param key 保存的key
      * @return byte数据
      */
+    @Nullable
     public static byte[] getByte(String key) {
         return ACache.get(BaseApplication.getJDApplication()).getAsBinary(key);
     }
@@ -226,19 +187,49 @@ public class CacheUtils {
      * @param key   保存的key
      * @param value 保存的 bitmap 数据
      */
-    public static void putBitmap(String key, Bitmap value) {
-        ACache.get(BaseApplication.getJDApplication()).put(key, value);
+    public static boolean putBitmap(String key, Bitmap value) {
+        if (key==null||value==null){
+            return false;
+        }
+        return ACache.get(BaseApplication.getJDApplication()).put(key, value);
     }
 
+    public static boolean putBitmap(String key, Bitmap value,long startTime) {
+        if (key==null||value==null){
+            return false;
+        }
+        return ACache.get(BaseApplication.getJDApplication()).put(key,startTime, value);
+    }
     /**
      * 保存 bitmap 到 缓存中
      *
      * @param key      保存的key
      * @param value    保存的 bitmap 数据
-     * @param saveTime 保存的时间，单位：秒
+     * @param liveTime 保存的时间，单位：秒
      */
-    public static void putBitmap(String key, Bitmap value, int saveTime) {
-        ACache.get(BaseApplication.getJDApplication()).put(key, value, saveTime);
+    public static boolean putBitmap(String key, Bitmap value, int liveTime) {
+        if (key==null||value==null){
+            return false;
+        }
+        return ACache.get(BaseApplication.getJDApplication()).put(key, value, liveTime * 1000);
+    }
+
+    public static boolean putBitmap(String key, Bitmap value,long startTime, int liveTime) {
+        if (key==null||value==null){
+            return false;
+        }
+        return ACache.get(BaseApplication.getJDApplication()).put(key, value, startTime,liveTime * 1000);
+    }
+
+    public static boolean putBitmapWithExtendTime(String key,Bitmap value,int liveTime){
+        return putBitmapWithExtendTime(key, value, System.currentTimeMillis(),liveTime);
+    }
+
+    public static boolean putBitmapWithExtendTime(String key,Bitmap value,long startTime,int liveTime){
+        if (key==null||value==null){
+            return false;
+        }
+        return ACache.get(BaseApplication.getJDApplication()).putWithExtendTime(key,value,startTime,liveTime*1000);
     }
 
     /**
@@ -247,40 +238,11 @@ public class CacheUtils {
      * @param key 保存的key
      * @return bitmap 数据
      */
+    @Nullable
     public static Bitmap getBitmap(String key) {
         return ACache.get(BaseApplication.getJDApplication()).getAsBitmap(key);
     }
 
-    /**
-     * 保存 drawable 到 缓存中
-     *
-     * @param key   保存的key
-     * @param value 保存的 drawable 数据
-     */
-    public static void putDrawable(String key, Drawable value) {
-        ACache.get(BaseApplication.getJDApplication()).put(key, value);
-    }
-
-    /**
-     * 保存 drawable 到 缓存中
-     *
-     * @param key      保存的key
-     * @param value    保存的 drawable 数据
-     * @param saveTime 保存的时间，单位：秒
-     */
-    public static void putDrawable(String key, Drawable value, int saveTime) {
-        ACache.get(BaseApplication.getJDApplication()).put(key, value, saveTime);
-    }
-
-    /**
-     * 读取 drawable 数据
-     *
-     * @param key 保存的key
-     * @return drawable 数据
-     */
-    public static Drawable getDrawable(String key) {
-        return ACache.get(BaseApplication.getJDApplication()).getAsDrawable(key);
-    }
 
     /**
      * 移除某个key
