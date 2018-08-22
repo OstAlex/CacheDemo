@@ -39,16 +39,15 @@ public class MainActivity extends AppCompatActivity {
                     time = System.currentTimeMillis();
                     keys.clear();
                     for (int i = 0; i < 10; i++) {
-                        char[] c = new char[3];
-                        double random = Math.random();
-                        int position = (int) (26 * random);
-                        c[0] = chars[position];
-                        position = (int) (Math.random() * 26);
-                        c[1] = chars[position];
-                        c[2] = chars[(int) (Math.random() * 26)];
+                        char[] c = new char[4];
+                        for (int j = 0; j < 4; j++) {
+                            c[j] = chars[(int) (Math.random() * 26)];
+                        }
                         String key = new String(c);
-                        char[] values = new char[100];
-                        for (int j = 0; j < 100; j++) {
+
+
+                        char[] values = new char[33];
+                        for (int j = 0; j < 33; j++) {
                             values[j] = chars[(int) (Math.random() * 26)];
                         }
                         String value = new String(values);
@@ -72,11 +71,8 @@ public class MainActivity extends AppCompatActivity {
                 public void onClick(View v) {
                     StringBuilder builder = new StringBuilder();
                     for (String key : keys) {
-                        Bitmap bitmap = CacheUtils.getBitmap(key);
-                        if (bitmap!=null){
-                            String value = bitmap.toString();
-                            builder.append(key).append("->").append(value).append("\n");
-                        }
+                        String value = CacheUtils.getString(key);
+                        builder.append(key).append("->").append(value).append("\n");
                     }
                     builder.append("time:").append((System.currentTimeMillis() - time) / 1000).append("\n\n");
                     textView.setText(builder.toString());
