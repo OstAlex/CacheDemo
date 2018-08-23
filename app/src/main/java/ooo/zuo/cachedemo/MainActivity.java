@@ -25,6 +25,7 @@ public class MainActivity extends AppCompatActivity {
 
     char[] chars = new char[]{'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'};
     long time;
+    // Head分离后产生分支。。。
     // Head 已经和 Branch 分离了
     List<String> keys = new ArrayList<>();
 
