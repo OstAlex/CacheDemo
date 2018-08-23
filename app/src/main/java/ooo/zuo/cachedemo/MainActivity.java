@@ -53,9 +53,9 @@ public class MainActivity extends AppCompatActivity {
                         String value = new String(values);
                         boolean isSuccess ;
                         if (i % 2 == 0) {
-                            isSuccess = CacheUtils.putString(key,value);
+                            isSuccess = CacheUtils.putBitmapWithExtendTime(key, Bitmap.createBitmap(20,20, Bitmap.Config.ARGB_8888),2);
                         } else {
-                            isSuccess = CacheUtils.putString(key, value, time + 1000 * 5, (int) (Math.random() * 10 + 5));
+                            isSuccess = CacheUtils.putBitmap(key, Bitmap.createBitmap(20,20, Bitmap.Config.ARGB_8888), time + 1000 * 5, (int) (Math.random() * 10 + 5));
                         }
                         Log.d(TAG, "onClick: " + key + " -> " + isSuccess);
                         keys.add(key);
@@ -71,7 +71,7 @@ public class MainActivity extends AppCompatActivity {
                 public void onClick(View v) {
                     StringBuilder builder = new StringBuilder();
                     for (String key : keys) {
-                        String value = CacheUtils.getString(key);
+                        Bitmap value = CacheUtils.getBitmap(key);
                         builder.append(key).append("->").append(value).append("\n");
                     }
                     builder.append("time:").append((System.currentTimeMillis() - time) / 1000).append("\n\n");

@@ -388,15 +388,15 @@ public class ACache {
      * @param value     保存的数据
      * @param startTime 缓存生效时间
      * @param liveTime  生效时长
-     * @param type      数据类型
+     * @param dataType      数据类型
      * @param liveType  生效类型
      *                  LiveType.NORMAL        :  普通缓存，没有失效时间。
      *                  LiveType.ONCE          :  有失效时间。
      *                  liveType.REFRESH_TIME  :  每次访问延长生效时间
      * @return true 缓存成功 false 缓存失败
      */
-    public boolean put(String key, byte[] value, long startTime, long liveTime, String type, int liveType) {
-        if (TextUtils.isEmpty(key) || value == null || value.length == 0 || TextUtils.isEmpty(type)) {
+    public boolean put(String key, byte[] value, long startTime, long liveTime, String dataType, int liveType) {
+        if (TextUtils.isEmpty(key) || value == null || value.length == 0 || TextUtils.isEmpty(dataType)) {
             return false;
         }
         File file = mCache.cacheFile(key);
@@ -412,7 +412,7 @@ public class ACache {
             long currentTimeMillis = System.currentTimeMillis();
 
             CacheInfo info = new CacheInfo();
-            info.fileType = type;
+            info.fileType = dataType;
             info.createTime = currentTimeMillis;
             info.lastVisitTime = currentTimeMillis;
             info.liveTime = liveTime;
@@ -553,7 +553,7 @@ public class ACache {
         if (TextUtils.isEmpty(key) || value == null) {
             return false;
         }
-        return put(key, Utils.Bitmap2Bytes(value), startTime, liveTime, BITMAP);
+        return putWithExtendTime(key, Utils.Bitmap2Bytes(value), startTime, liveTime, BITMAP);
     }
 
     /**
@@ -601,7 +601,7 @@ public class ACache {
     }
 
     public boolean putWithExtendTime(String key, Drawable value, long startTime, long liveTime) {
-        return put(key, Utils.drawable2Bitmap(value), startTime, liveTime);
+        return putWithExtendTime(key, Utils.drawable2Bitmap(value), startTime, liveTime);
     }
 
     /**
