@@ -44,13 +44,6 @@ public class MainActivity extends AppCompatActivity {
                             c[j] = chars[(int) (Math.random() * 26)];
                         }
                         String key = new String(c);
-
-
-                        char[] values = new char[33];
-                        for (int j = 0; j < 33; j++) {
-                            values[j] = chars[(int) (Math.random() * 26)];
-                        }
-                        String value = new String(values);
                         boolean isSuccess ;
                         if (i % 2 == 0) {
                             isSuccess = CacheUtils.putBitmapWithExtendTime(key, Bitmap.createBitmap(20,20, Bitmap.Config.ARGB_8888),2);
