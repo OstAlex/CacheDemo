@@ -678,7 +678,7 @@ public class ACache {
             this.countLimit = countLimit;
             cacheSize = new AtomicLong();
             cacheCount = new AtomicInteger();
-            calculateCacheSizeAndCacheCount();
+//            calculateCacheSizeAndCacheCount();
         }
 
         /**
@@ -734,7 +734,7 @@ public class ACache {
         @NonNull
         private File cacheFile(@NonNull String key) {
             File file = new File(cacheDir, key.hashCode() + "");
-            lastUsageDates.put(file, System.currentTimeMillis());
+//            lastUsageDates.put(file, System.currentTimeMillis());
             return file;
         }
 
@@ -849,7 +849,7 @@ public class ACache {
         }
 
         private void clear() {
-            lastUsageDates.clear();
+//            lastUsageDates.clear();
             cacheSize.set(0);
             File[] files = cacheDir.listFiles();
             if (files != null) {
