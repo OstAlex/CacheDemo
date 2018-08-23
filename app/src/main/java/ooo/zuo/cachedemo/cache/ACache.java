@@ -36,7 +36,6 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.FilenameFilter;
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -239,7 +238,7 @@ public class ACache {
         }
         try {
             return new String(bytes, "UTF-8");
-        } catch (UnsupportedEncodingException e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
         return null;
@@ -254,17 +253,19 @@ public class ACache {
             return -1;
         }
         File file = file(key);
+        if (file==null){
+            return -1;
+        }
         File cacheInfoFile = mCache.cacheInfoFile(key);
-        if (file != null && cacheInfoFile.exists()) {
+        if ( cacheInfoFile.exists()) {
             CacheInfo cacheInfo = mCache.readCacheInfo(cacheInfoFile);
             if (cacheInfo != null && Utils.isAlive(cacheInfo)) {
                 return cacheInfo.lastVisitTime;
             }
-        } else if (file != null) {
-            long lastModified = file.lastModified();
-            return lastModified == 0 ? -1 : lastModified;
         }
-        return -1;
+
+        long lastModified = file.lastModified();
+        return lastModified == 0 ? -1 : lastModified;
     }
 
 
@@ -751,7 +752,7 @@ public class ACache {
             }
             try {
                 return Utils.convertToCacheInfo(new String(bytes, "UTF-8"));
-            } catch (UnsupportedEncodingException e) {
+            } catch (Exception e) {
                 e.printStackTrace();
             }
             return null;
